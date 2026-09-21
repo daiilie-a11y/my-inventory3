@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>卡其典雅多層級庫存管理系統 (雲端同步版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        khaki: {
+                            50: '#FAF8F5',
+                            100: '#F4EFEA',
+                            200: '#E6E1DA',
+                            300: '#D5C9BD',
+                            400: '#B8977E',
+                            500: '#A68065',
+                            600: '#8C674E',
+                            700: '#6E4E3A',
+                            800: '#523A2B',
+                            900: '#3A291E',
+                        },
+                        warm: {
+                            bg: '#FAF8F5',
+                            card: '#FFFFFF',
+                            text: '#3A322C',
+                            muted: '#8C827A',
+                            border: '#E8E3DD',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #FAF8F5;
+            color: #3A322C;
+            font-family: 'Noto Sans TC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .round-checkbox {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .round-checkbox:checked {
+            background-color: #FFFFFF;
+            border-color: #FFFFFF;
+        }
+        .round-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            width: 5px;
+            height: 10px;
+            border-bottom: 2px solid #A68065;
+            border-right: 2px solid #A68065;
+            margin-top: -1px;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] { -moz-appearance: textfield; }
+        .folder-card-bg {
+            background: linear-gradient(135deg, #B8977E 0%, #8C674E 100%);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased pb-24">
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-4 right-4 left-4 sm:left-auto sm:w-80 z-[60] flex flex-col gap-2 pointer-events-none"></div>
+
+    <header class="bg-white border-b border-warm-border sticky top-0 z-30 shadow-xs">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-khaki-400 to-khaki-600 flex items-center justify-center text-white shadow-sm">
+                        <i class="fa-solid fa-boxes-stacked text-sm"></i>
+                    </div>
+                    <h1 class="font-bold text-warm-text text-base tracking-tight">庫存總覽</h1>
+                </div>
+
+                <!-- Google Auth & Action Buttons -->
+                <div class="flex items-center gap-2">
+                    <div id="auth-container" class="flex items-center">
+                        <button id="google-login-btn" onclick="handleGoogleLogin()" class="px-2.5 py-1.5 h-8 rounded-xl bg-white border border-warm-border hover:bg-khaki-50 text-warm-text text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all">
+                            <i class="fa-brands fa-google text-khaki-600"></i>
+                            <span class="hidden sm:inline">Google 登入</span>
+                        </button>
+                        <div id="user-profile" class="hidden flex items-center gap-1.5 bg-khaki-50 border border-warm-border px-2 py-1 rounded-xl">
+                            <img id="user-avatar" class="w-5 h-5 rounded-full object-cover border border-warm-border" src="" alt="Avatar">
+                            <span id="user-name" class="text-xs font-bold text-warm-text max-w-[80px] truncate hidden sm:inline"></span>
+                            <button onclick="handleLogout()" title="登出" class="text-warm-muted hover:text-rose-500 text-xs pl-1">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="openFolderModal()" title="新增資料夾" class="w-8 h-8 rounded-xl border border-warm-border bg-khaki-50 hover:bg-khaki-100 text-khaki-700 flex items-center justify-center transition-all shadow-sm">
+                        <i class="fa-solid fa-folder-plus"></i>
+                    </button>
+                    <button onclick="openItemModal()" class="px-3 py-1.5 h-8 rounded-xl bg-khaki-600 hover:bg-khaki-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>新增商品</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="breadcrumbs" class="flex items-center gap-1.5 text-xs text-warm-muted overflow-x-auto no-scrollbar pb-1 whitespace-nowrap">
+                <!-- 動態注入麵包屑 -->
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl w-full mx-auto px-4 pt-4 space-y-5">
+        
+        <section id="folder-section" class="hidden">
+            <h2 class="text-xs font-bold text-khaki-700 mb-2.5 flex items-center gap-1.5">
+                <i class="fa-regular fa-folder-open"></i> 子資料夾
+            </h2>
+            <div id="folder-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                <!-- 動態注入資料夾卡片 -->
+            </div>
+        </section>
+
+        <section id="item-section">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                <h2 class="text-xs font-bold text-khaki-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-list"></i> 內容商品
+                    <span class="text-[11px] font-normal text-warm-muted ml-1">
+                        (共 <span id="item-count" class="text-khaki-700 font-bold">0</span> 項)
+                    </span>
+                </h2>
+                
+                <!-- 搜尋商品 -->
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-warm-muted text-xs"></i>
+                    <input type="text" id="search-input" oninput="renderItemsTable()" placeholder="搜尋商品名稱..." class="w-full pl-8 pr-3 py-1.5 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white shadow-xs">
+                </div>
+            </div>
+
+            <!-- 庫存表格 (帶有一鍵排序功能) -->
+            <div class="bg-white rounded-2xl border border-warm-border shadow-2xs overflow-hidden">
+                <table class="w-full text-left table-fixed border-collapse">
+                    <colgroup>
+                        <col class="w-[36px] sm:w-[42px]">
+                        <col class="w-[52px] sm:w-[60px]">
+                        <col class="w-auto">
+                        <col class="w-[105px] sm:w-[120px]">
+                        <col class="w-[40px] sm:w-[48px]">
+                    </colgroup>
+                    <thead>
+                        <tr class="bg-khaki-50 border-b border-warm-border text-[11px] font-bold text-khaki-700 select-none">
+                            <th class="p-2 sm:py-3 text-center">
+                                <input type="checkbox" id="select-all-items" onchange="toggleSelectAllItems()" class="w-3.5 h-3.5 text-khaki-600 rounded border-warm-border focus:ring-khaki-400 cursor-pointer accent-khaki-600">
+                            </th>
+                            <th class="py-2.5 px-1">圖片</th>
+                            
+                            <!-- 可點擊排序：名稱 / 備註 -->
+                            <th class="py-2.5 px-1.5 cursor-pointer hover:bg-khaki-100/70 transition-colors" onclick="toggleSort('name')" title="按名稱一鍵排序">
+                                <div class="flex items-center gap-1">
+                                    <span>名稱 / 備註</span>
+                                    <span id="sort-icon-name" class="inline-flex items-center gap-0.5 text-warm-muted">
+                                        <i class="fa-solid fa-sort text-[10px]"></i>
+                                    </span>
+                                </div>
+                            </th>
+
+                            <!-- 可點擊排序：庫存數量 -->
+                            <th class="py-2.5 px-1 text-center cursor-pointer hover:bg-khaki-100/70 transition-colors" onclick="toggleSort('quantity')" title="按數量一鍵排序">
+                                <div class="flex items-center justify-center gap-1">
+                                    <span>庫存</span>
+                                    <span id="sort-icon-quantity" class="inline-flex items-center gap-0.5 text-warm-muted">
+                                        <i class="fa-solid fa-sort text-[10px]"></i>
+                                    </span>
+                                </div>
+                            </th>
+                            
+                            <th class="py-2.5 pr-2 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-table-body" class="divide-y divide-warm-border text-xs">
+                        <!-- 動態注入表格列 -->
+                    </tbody>
+                </table>
+
+                <div id="empty-state" class="hidden flex flex-col items-center justify-center py-10 px-4 text-center">
+                    <div class="w-14 h-14 bg-khaki-50 text-khaki-300 rounded-full flex items-center justify-center text-xl mb-3">
+                        <i class="fa-solid fa-box-open"></i>
+                    </div>
+                    <p class="text-warm-muted text-xs">此資料夾為空或無符合搜尋的商品</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="batch-action-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md bg-warm-text text-white px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between z-40 transition-all duration-300 translate-y-24 opacity-0">
+        <div class="flex items-center gap-2">
+            <div class="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                <i class="fa-solid fa-check text-warm-text text-[10px]"></i>
+            </div>
+            <div class="text-sm font-bold tracking-wide">
+                已選擇 <span id="batch-count" class="text-khaki-300">0</span> 個
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="openBatchMoveModal()" class="text-xs font-bold hover:text-khaki-300 transition-colors">
+                移動
+            </button>
+            <button onclick="confirmBatchDelete()" class="text-xs font-bold text-rose-400 hover:text-rose-300 transition-colors">
+                刪除
+            </button>
+            <div class="w-px h-3 bg-white/30"></div>
+            <button onclick="clearSelection()" class="text-xs text-white/70 hover:text-white transition-colors">
+                取消
+            </button>
+        </div>
+    </div>
+
+    <!-- 建立資料夾 Modal -->
+    <div id="folder-modal" class="fixed inset-0 bg-warm-text/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden p-5 transform scale-95 opacity-0 transition-all duration-200" id="folder-modal-content">
+            <h3 class="font-bold text-warm-text text-sm mb-3">新增資料夾</h3>
+            <form onsubmit="handleFolderSubmit(event)">
+                <input type="text" id="folder-name-input" required placeholder="資料夾名稱..." class="w-full px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-khaki-50 mb-4">
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeFolderModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-khaki-600 text-white rounded-xl text-xs font-bold">建立</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 商品 Modal -->
+    <div id="item-modal" class="fixed inset-0 bg-warm-text/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh] transform scale-95 opacity-0 transition-all duration-200" id="item-modal-content">
+            <div class="p-4 border-b border-warm-border flex items-center justify-between bg-khaki-50/50">
+                <h3 id="item-modal-title" class="font-bold text-warm-text text-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-box text-khaki-500"></i> 新增商品
+                </h3>
+                <button onclick="closeItemModal()" class="text-warm-muted hover:text-warm-text">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form id="item-form" onsubmit="handleItemSubmit(event)" class="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+                <input type="hidden" id="item-id">
+                
+                <div>
+                    <label class="block font-bold text-warm-text mb-1.5">商品照片</label>
+                    <div class="flex items-center gap-3">
+                        <div id="image-preview-box" class="w-16 h-16 rounded-xl border border-dashed border-warm-border bg-khaki-50 flex flex-col items-center justify-center overflow-hidden flex-shrink-0 relative">
+                            <i class="fa-regular fa-image text-xl text-khaki-300"></i>
+                            <img id="image-preview" src="" class="absolute inset-0 w-full h-full object-cover hidden">
+                        </div>
+                        <div class="flex-1 space-y-1">
+                            <label class="cursor-pointer bg-khaki-100 hover:bg-khaki-200 text-khaki-800 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 font-semibold transition-colors">
+                                <i class="fa-solid fa-upload"></i> 選擇圖片
+                                <input type="file" id="item-image-input" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
+                            </label>
+                            <button type="button" id="remove-image-btn" onclick="removeImage()" class="hidden text-[11px] text-rose-500 hover:underline block">移除照片</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block font-bold text-warm-text mb-1">商品名稱 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="item-name" required class="w-full px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-warm-text mb-1">備註 / 規格 (可選)</label>
+                        <input type="text" id="item-note" class="w-full px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white">
+                    </div>
+                </div>
+
+                <div class="p-3 bg-khaki-50 rounded-xl border border-warm-border space-y-3">
+                    <div class="font-bold text-khaki-800 flex items-center gap-1.5 text-[11px]">
+                        <i class="fa-solid fa-palette"></i> 視覺客製化
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-warm-muted mb-1">字體粗細</label>
+                            <select id="item-font-weight" class="w-full px-2 py-1.5 bg-white border border-warm-border rounded-lg text-xs">
+                                <option value="400">標準</option>
+                                <option value="700">粗體</option>
+                                <option value="900">特粗</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-warm-muted mb-1">文字顏色</label>
+                            <div class="flex items-center gap-1">
+                                <input type="color" id="item-text-color" value="#3A322C" class="w-6 h-6 rounded cursor-pointer p-0 block">
+                                <input type="text" id="item-text-color-hex" value="#3A322C" oninput="document.getElementById('item-text-color').value=this.value" class="w-full px-1 py-1 text-[10px] bg-white border border-warm-border rounded">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-warm-muted mb-1">格子底色</label>
+                            <div class="flex items-center gap-1">
+                                <input type="color" id="item-bg-color" value="#FFFFFF" class="w-6 h-6 rounded cursor-pointer p-0 block">
+                                <input type="text" id="item-bg-color-hex" value="#FFFFFF" oninput="document.getElementById('item-bg-color').value=this.value" class="w-full px-1 py-1 text-[10px] bg-white border border-warm-border rounded">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-warm-text mb-1">數量</label>
+                    <input type="number" id="item-quantity" min="0" value="1" required class="w-24 px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white">
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeItemModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-khaki-600 hover:bg-khaki-700 text-white rounded-xl text-xs font-bold shadow-sm">儲存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 移動至資料夾 Modal (大字體 1.5x + 快速建檔) -->
+    <div id="move-modal" class="fixed inset-0 bg-warm-text/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-5 transform scale-95 opacity-0 transition-all duration-200" id="move-modal-content">
+            <h3 class="font-bold text-warm-text text-sm mb-2 flex items-center gap-1.5">
+                <i class="fa-solid fa-folder-tree text-khaki-500"></i> 移動至資料夾
+            </h3>
+            
+            <div class="flex gap-2 mb-3 mt-3">
+                <input type="text" id="quick-folder-name" placeholder="快速新增資料夾..." class="flex-1 px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-khaki-50">
+                <button type="button" onclick="quickAddFolder()" class="px-3 py-2 bg-khaki-100 hover:bg-khaki-200 text-khaki-700 rounded-xl text-xs font-bold transition-colors shadow-sm">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+
+            <select id="move-target-select" size="8" class="w-full px-2 py-2 border border-warm-border rounded-xl text-base focus:outline-none focus:border-khaki-500 bg-khaki-50/50 mb-4 h-56 overflow-y-auto">
+                <!-- 動態注入階層選項 -->
+            </select>
+            
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeMoveModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted">取消</button>
+                <button type="button" onclick="executeBatchMove()" class="px-4 py-2 bg-khaki-600 text-white rounded-xl text-xs font-bold">確認移動</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 刪除確認 Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-warm-text/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden p-5 text-center transform scale-95 opacity-0 transition-all duration-200" id="confirm-modal-content">
+            <div class="w-10 h-10 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto text-lg mb-3">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirm-title" class="font-bold text-warm-text text-sm">確認刪除？</h3>
+            <p id="confirm-msg" class="text-xs text-warm-muted mt-1 mb-4">刪除後無法復原。若刪除資料夾，其內含物品將一併刪除。</p>
+            <div class="flex justify-center gap-2">
+                <button type="button" onclick="closeConfirmModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted bg-khaki-50 rounded-xl">取消</button>
+                <button type="button" id="confirm-btn" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold">確定刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 全域變數宣告
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'inventory-app-default';
+        let firebaseApp, auth, db;
+        let currentUser = null;
+        let unsubscribeFirestore = null;
+
+        // Firebase 初始化與備援機制
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                const config = JSON.parse(__firebase_config);
+                firebaseApp = initializeApp(config);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+            }
+        } catch (e) {
+            console.warn("Firebase 初始化跳過或配置有誤，將使用本地 Mode:", e);
+        }
+
+        // 全域儲存與排序狀態
+        window.folders = [];
+        window.items = [];
+        window.currentFolderId = null;
+        window.selectedFolders = new Set();
+        window.selectedItems = new Set();
+        window.currentImageBase64 = '';
+        window.confirmActionCallback = null;
+
+        // 排序狀態: sortColumn = null | 'name' | 'quantity', sortDirection = 'none' | 'asc' | 'desc'
+        window.sortColumn = null;
+        window.sortDirection = 'none';
+
+        const DEFAULT_FOLDERS = [
+            { id: 'f_clothes', name: '服飾', parentId: null, createdAt: 1 },
+            { id: 'f_tops', name: '上衣', parentId: 'f_clothes', createdAt: 2 },
+            { id: 'f_bottoms', name: '下裝', parentId: 'f_clothes', createdAt: 3 }
+        ];
+        const DEFAULT_ITEMS = [
+            {
+                id: 'i_1', name: '純棉竹節面料T恤', note: '白色 M 碼', quantity: 24, folderId: 'f_tops', image: '',
+                style: { fontWeight: '500', color: '#3A322C', bgColor: '#FFFFFF' }, createdAt: 4
+            },
+            {
+                id: 'i_2', name: '設計感彎刀牛仔褲', note: '復古藍', quantity: 15, folderId: 'f_bottoms', image: '',
+                style: { fontWeight: '700', color: '#523A2B', bgColor: '#FAF8F5' }, createdAt: 5
+            }
+        ];
+
+        // 頁面加載完成
+        window.addEventListener('DOMContentLoaded', async () => {
+            loadLocalData();
+
+            // 監聽 Firebase Auth 登入狀態
+            if (auth) {
+                // 若有 initial token 先自動簽署
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } catch (e) {
+                        console.warn("Custom token sign-in failed:", e);
+                    }
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    currentUser = user;
+                    updateAuthUI(user);
+                    if (user) {
+                        setupCloudSync(user.uid);
+                    } else {
+                        if (unsubscribeFirestore) unsubscribeFirestore();
+                        loadLocalData();
+                        renderView();
+                    }
+                });
+            } else {
+                renderView();
+            }
+
+            document.getElementById('item-text-color').addEventListener('input', e => document.getElementById('item-text-color-hex').value = e.target.value.toUpperCase());
+            document.getElementById('item-bg-color').addEventListener('input', e => document.getElementById('item-bg-color-hex').value = e.target.value.toUpperCase());
+        });
+
+        window.handleGoogleLogin = async function() {
+            if (!auth) {
+                showToast("雲端同步尚未設定，請先使用訪客模式", "error");
+                return;
+            }
+            const provider = new GoogleAuthProvider();
+            try {
+                await signInWithPopup(auth, provider);
+                showToast("Google 登入成功！已切換至雲端庫存", "success");
+            } catch (err) {
+                console.error("Google Auth Error:", err);
+                showToast("登入取消或失敗: " + err.message, "error");
+            }
+        };
+
+        window.handleLogout = async function() {
+            if (auth) {
+                await signOut(auth);
+                if (unsubscribeFirestore) unsubscribeFirestore();
+                showToast("已登出，切換為本地模式", "info");
+            }
+        };
+
+        function updateAuthUI(user) {
+            const loginBtn = document.getElementById('google-login-btn');
+            const profile = document.getElementById('user-profile');
+            const avatar = document.getElementById('user-avatar');
+            const nameEl = document.getElementById('user-name');
+
+            if (user) {
+                loginBtn.classList.add('hidden');
+                profile.classList.remove('hidden');
+                avatar.src = user.photoURL || 'https://placehold.co/100x100/A68065/FFFFFF?text=User';
+                nameEl.textContent = user.displayName || '使用者';
+            } else {
+                loginBtn.classList.remove('hidden');
+                profile.classList.add('hidden');
+            }
+        }
+
+        // 雲端即時同步 (遵守 Mandatory Rule 1: /artifacts/{appId}/users/{userId}/userData/inventory)
+        function setupCloudSync(userId) {
+            if (!db) return;
+            const docRef = doc(db, 'artifacts', appId, 'users', userId, 'userData', 'inventory');
+            
+            unsubscribeFirestore = onSnapshot(docRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    window.folders = data.folders || [];
+                    window.items = data.items || [];
+                    saveToLocalStorage(); // 本地留存一份備份
+                    renderView();
+                } else {
+                    // 若雲端尚無資料，將現有本地資料推上雲端
+                    saveData();
+                }
+            }, (err) => {
+                console.error("Firestore sync error:", err);
+            });
+        }
+
+        function loadLocalData() {
+            try {
+                const storedFolders = localStorage.getItem('khaki_nested_folders');
+                const storedItems = localStorage.getItem('khaki_nested_items');
+                window.folders = storedFolders ? JSON.parse(storedFolders) : DEFAULT_FOLDERS;
+                window.items = storedItems ? JSON.parse(storedItems) : DEFAULT_ITEMS;
+                if (!storedFolders) saveToLocalStorage();
+            } catch (e) {
+                window.folders = DEFAULT_FOLDERS;
+                window.items = DEFAULT_ITEMS;
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('khaki_nested_folders', JSON.stringify(window.folders));
+            localStorage.setItem('khaki_nested_items', JSON.stringify(window.items));
+        }
+
+        window.saveData = function() {
+            saveToLocalStorage();
+            if (currentUser && db) {
+                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'userData', 'inventory');
+                setDoc(docRef, {
+                    folders: window.folders,
+                    items: window.items,
+                    updatedAt: Date.now()
+                }).catch(err => console.error("Cloud save failed:", err));
+            }
+        };
+
+        window.showToast = function(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bg = type === 'success' ? 'bg-khaki-700' : type === 'error' ? 'bg-rose-600' : 'bg-warm-text';
+            toast.className = `${bg} text-white px-4 py-2.5 rounded-xl shadow-lg text-xs font-bold transition-all duration-300 opacity-0 transform translate-y-2`;
+            toast.textContent = msg;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('opacity-0', 'translate-y-2'), 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        };
+
+        window.toggleSort = function(type) {
+            if (type === 'name') {
+                if (window.sortColumn !== 'name') {
+                    window.sortColumn = 'name';
+                    window.sortDirection = 'asc'; // 首字升序
+                } else if (window.sortDirection === 'asc') {
+                    window.sortDirection = 'desc'; // 首字降序
+                } else {
+                    window.sortColumn = null;
+                    window.sortDirection = 'none'; // 恢復預設
+                }
+            } else if (type === 'quantity') {
+                if (window.sortColumn !== 'quantity') {
+                    window.sortColumn = 'quantity';
+                    window.sortDirection = 'desc'; // 庫存多到少
+                } else if (window.sortDirection === 'desc') {
+                    window.sortDirection = 'asc'; // 庫存少到多
+                } else {
+                    window.sortColumn = null;
+                    window.sortDirection = 'none'; // 恢復預設
+                }
+            }
+            renderItemsTable();
+        };
+
+        function updateSortHeaderIcons() {
+            const nameIcon = document.getElementById('sort-icon-name');
+            const qtyIcon = document.getElementById('sort-icon-quantity');
+
+            // 名稱排序 Icon
+            if (window.sortColumn === 'name') {
+                if (window.sortDirection === 'asc') {
+                    nameIcon.innerHTML = `<i class="fa-solid fa-sort-up text-khaki-700 font-bold"></i><span class="text-[9px] bg-khaki-200 text-khaki-800 px-1 rounded">A-Z</span>`;
+                } else if (window.sortDirection === 'desc') {
+                    nameIcon.innerHTML = `<i class="fa-solid fa-sort-down text-khaki-700 font-bold"></i><span class="text-[9px] bg-khaki-200 text-khaki-800 px-1 rounded">Z-A</span>`;
+                }
+            } else {
+                nameIcon.innerHTML = `<i class="fa-solid fa-sort text-[10px]"></i>`;
+            }
+
+            // 庫存排序 Icon
+            if (window.sortColumn === 'quantity') {
+                if (window.sortDirection === 'desc') {
+                    qtyIcon.innerHTML = `<i class="fa-solid fa-sort-down text-khaki-700 font-bold"></i><span class="text-[9px] bg-khaki-200 text-khaki-800 px-1 rounded">高→低</span>`;
+                } else if (window.sortDirection === 'asc') {
+                    qtyIcon.innerHTML = `<i class="fa-solid fa-sort-up text-khaki-700 font-bold"></i><span class="text-[9px] bg-khaki-200 text-khaki-800 px-1 rounded">低→高</span>`;
+                }
+            } else {
+                qtyIcon.innerHTML = `<i class="fa-solid fa-sort text-[10px]"></i>`;
+            }
+        }
+
+        window.renderView = function() {
+            renderBreadcrumbs();
+            renderFolderGrid();
+            renderItemsTable();
+            updateBatchUI();
+        };
+
+        function renderBreadcrumbs() {
+            const container = document.getElementById('breadcrumbs');
+            container.innerHTML = '';
+
+            const path = [];
+            let curr = window.folders.find(f => f.id === window.currentFolderId);
+            while (curr) {
+                path.unshift(curr);
+                curr = window.folders.find(f => f.id === curr.parentId);
+            }
+
+            const rootBtn = document.createElement('button');
+            rootBtn.onclick = () => navigateTo(null);
+            rootBtn.className = `hover:text-khaki-600 transition-colors ${window.currentFolderId === null ? 'font-bold text-khaki-700' : ''}`;
+            rootBtn.innerHTML = '<i class="fa-solid fa-house text-[10px]"></i> 主目錄';
+            container.appendChild(rootBtn);
+
+            path.forEach((folder, index) => {
+                const sep = document.createElement('span');
+                sep.className = 'text-warm-border px-1';
+                sep.textContent = '›';
+                container.appendChild(sep);
+
+                const btn = document.createElement('button');
+                btn.onclick = () => navigateTo(folder.id);
+                btn.className = `hover:text-khaki-600 transition-colors truncate max-w-[120px] ${index === path.length - 1 ? 'font-bold text-khaki-700' : ''}`;
+                btn.textContent = folder.name;
+                container.appendChild(btn);
+            });
+        }
+
+        window.navigateTo = function(folderId) {
+            window.currentFolderId = folderId;
+            document.getElementById('search-input').value = '';
+            clearSelection();
+            renderView();
+        };
+
+        function renderFolderGrid() {
+            const section = document.getElementById('folder-section');
+            const grid = document.getElementById('folder-grid');
+            grid.innerHTML = '';
+
+            const childFolders = window.folders.filter(f => f.parentId === window.currentFolderId);
+            
+            if (childFolders.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+            section.classList.remove('hidden');
+
+            childFolders.forEach(folder => {
+                const isSelected = window.selectedFolders.has(folder.id);
+                const card = document.createElement('div');
+                card.className = `relative aspect-square rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between shadow-sm cursor-pointer hover:shadow-md transition-transform active:scale-95 border-2 ${isSelected ? 'border-khaki-700 folder-card-bg' : 'border-transparent folder-card-bg opacity-90'}`;
+                
+                card.onclick = (e) => {
+                    if(e.target.type !== 'checkbox') navigateTo(folder.id);
+                };
+
+                const cbWrapper = document.createElement('div');
+                cbWrapper.className = 'absolute top-2 left-2 z-10';
+                cbWrapper.innerHTML = `<input type="checkbox" class="round-checkbox" ${isSelected ? 'checked' : ''}>`;
+                
+                const cb = cbWrapper.querySelector('input');
+                cb.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleFolderSelection(folder.id);
+                };
+
+                const content = document.createElement('div');
+                content.className = 'mt-auto text-white';
+                content.innerHTML = `
+                    <i class="fa-solid fa-folder text-xl sm:text-2xl mb-1 opacity-80"></i>
+                    <div class="font-bold text-[11px] sm:text-xs truncate tracking-wide">${escapeHtml(folder.name)}</div>
+                `;
+
+                card.appendChild(cbWrapper);
+                card.appendChild(content);
+                grid.appendChild(card);
+            });
+        }
+
+        window.renderItemsTable = function() {
+            updateSortHeaderIcons();
+
+            const tbody = document.getElementById('items-table-body');
+            const emptyState = document.getElementById('empty-state');
+            const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+            
+            let currentItems = window.items.filter(i => i.folderId === window.currentFolderId);
+            
+            if(searchQuery) {
+                currentItems = currentItems.filter(i => i.name.toLowerCase().includes(searchQuery));
+            }
+
+            // 執行排序 logic
+            if (window.sortColumn === 'name') {
+                currentItems.sort((a, b) => {
+                    const res = a.name.localeCompare(b.name, 'zh-TW');
+                    return window.sortDirection === 'asc' ? res : -res;
+                });
+            } else if (window.sortColumn === 'quantity') {
+                currentItems.sort((a, b) => {
+                    return window.sortDirection === 'asc' ? a.quantity - b.quantity : b.quantity - a.quantity;
+                });
+            } else {
+                // 預設建立順序
+                currentItems.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            }
+            
+            document.getElementById('item-count').textContent = currentItems.length;
+            tbody.innerHTML = '';
+
+            if (currentItems.length === 0) {
+                emptyState.classList.remove('hidden');
+                document.getElementById('select-all-items').checked = false;
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            let allItemsSelected = true;
+
+            currentItems.forEach(item => {
+                const isSelected = window.selectedItems.has(item.id);
+                if (!isSelected) allItemsSelected = false;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-warm-border/60 hover:opacity-95 transition-opacity';
+                tr.style.backgroundColor = item.style.bgColor || '#FFFFFF';
+
+                tr.innerHTML = `
+                    <td class="p-2 text-center">
+                        <input type="checkbox" onchange="toggleItemSelection('${item.id}')" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 text-khaki-600 rounded border-warm-border cursor-pointer accent-khaki-600">
+                    </td>
+                    <td class="py-2 px-1">
+                        <div class="w-10 h-10 rounded-xl bg-khaki-50 border border-warm-border overflow-hidden flex items-center justify-center">
+                            ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-box text-khaki-300"></i>`}
+                        </div>
+                    </td>
+                    <td class="py-2 px-1.5 min-w-0">
+                        <div style="color:${item.style.color}; font-weight:${item.style.fontWeight};" class="text-xs sm:text-sm truncate">
+                            ${escapeHtml(item.name)}
+                        </div>
+                        ${item.note ? `<div class="text-[10px] text-warm-muted truncate mt-0.5">${escapeHtml(item.note)}</div>` : ''}
+                    </td>
+                    <td class="py-2 px-1 text-center">
+                        <div class="inline-flex items-center bg-white border border-warm-border rounded-lg shadow-2xs overflow-hidden">
+                            <button onclick="updateQty('${item.id}', -1)" class="w-6 h-6 sm:w-7 sm:h-7 text-warm-text hover:bg-khaki-100"><i class="fa-solid fa-minus text-[9px]"></i></button>
+                            <input type="number" value="${item.quantity}" onchange="setQty('${item.id}', this.value)" class="w-8 sm:w-10 h-6 sm:h-7 text-center text-xs font-bold text-khaki-800 border-x border-warm-border focus:outline-none">
+                            <button onclick="updateQty('${item.id}', 1)" class="w-6 h-6 sm:w-7 sm:h-7 text-warm-text hover:bg-khaki-100"><i class="fa-solid fa-plus text-[9px]"></i></button>
+                        </div>
+                    </td>
+                    <td class="py-2 pr-1.5 text-center">
+                        <button onclick="openItemModal('${item.id}')" class="p-1.5 text-warm-muted hover:text-khaki-600 transition-colors">
+                            <i class="fa-solid fa-pen-to-square text-xs"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('select-all-items').checked = allItemsSelected;
+        };
+
+        window.updateQty = function(id, delta) {
+            const item = window.items.find(i => i.id === id);
+            if(item) { item.quantity = Math.max(0, item.quantity + delta); saveData(); renderItemsTable(); }
+        };
+        window.setQty = function(id, val) {
+            const item = window.items.find(i => i.id === id);
+            if(item) { item.quantity = Math.max(0, parseInt(val)||0); saveData(); renderItemsTable(); }
+        };
+
+        function toggleFolderSelection(id) {
+            if(window.selectedFolders.has(id)) window.selectedFolders.delete(id);
+            else window.selectedFolders.add(id);
+            renderFolderGrid(); updateBatchUI();
+        }
+        window.toggleItemSelection = function(id) {
+            if(window.selectedItems.has(id)) window.selectedItems.delete(id);
+            else window.selectedItems.add(id);
+            renderItemsTable(); updateBatchUI();
+        };
+        window.toggleSelectAllItems = function() {
+            const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+            let currentItems = window.items.filter(i => i.folderId === window.currentFolderId);
+            if(searchQuery) currentItems = currentItems.filter(i => i.name.toLowerCase().includes(searchQuery));
+
+            const isAll = currentItems.length > 0 && currentItems.every(i => window.selectedItems.has(i.id));
+            if(isAll) currentItems.forEach(i => window.selectedItems.delete(i.id));
+            else currentItems.forEach(i => window.selectedItems.add(i.id));
+            renderItemsTable(); updateBatchUI();
+        };
+        window.clearSelection = function() {
+            window.selectedFolders.clear();
+            window.selectedItems.clear();
+            renderFolderGrid();
+            renderItemsTable();
+            updateBatchUI();
+        };
+        
+        function updateBatchUI() {
+            const bar = document.getElementById('batch-action-bar');
+            const total = window.selectedFolders.size + window.selectedItems.size;
+            document.getElementById('batch-count').textContent = total;
+            
+            if(total > 0) {
+                bar.classList.remove('translate-y-24', 'opacity-0');
+            } else {
+                bar.classList.add('translate-y-24', 'opacity-0');
+            }
+        }
+
+        function populateMoveOptions() {
+            const select = document.getElementById('move-target-select');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="root">📁 主目錄 (Root)</option>';
+            
+            const invalidTargets = new Set();
+            window.selectedFolders.forEach(fid => {
+                invalidTargets.add(fid);
+                const addDescendants = (parentId) => {
+                    window.folders.filter(f => f.parentId === parentId).forEach(child => {
+                        invalidTargets.add(child.id);
+                        addDescendants(child.id);
+                    });
+                };
+                addDescendants(fid);
+            });
+
+            const buildOptions = (parentId, depth) => {
+                const children = window.folders.filter(f => f.parentId === parentId);
+                children.forEach(child => {
+                    const option = document.createElement('option');
+                    option.value = child.id;
+                    option.innerHTML = '&nbsp;'.repeat(depth * 4) + '└ ' + escapeHtml(child.name);
+                    
+                    if(invalidTargets.has(child.id)) {
+                        option.disabled = true;
+                        option.className = 'text-warm-border italic';
+                    }
+                    select.appendChild(option);
+                    buildOptions(child.id, depth + 1);
+                });
+            };
+            buildOptions(null, 1);
+            
+            if(currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+        }
+
+        window.openBatchMoveModal = function() {
+            populateMoveOptions();
+            document.getElementById('quick-folder-name').value = '';
+            
+            const modal = document.getElementById('move-modal');
+            const content = document.getElementById('move-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.remove('scale-95', 'opacity-0'), 10);
+        };
+
+        window.closeMoveModal = function() {
+            const modal = document.getElementById('move-modal');
+            const content = document.getElementById('move-modal-content');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        };
+
+        window.quickAddFolder = function() {
+            const input = document.getElementById('quick-folder-name');
+            const name = input.value.trim();
+            if(!name) return;
+
+            const select = document.getElementById('move-target-select');
+            let targetVal = select.value;
+            let parentId = null;
+
+            if (targetVal && targetVal !== 'root') {
+                const selectedOption = select.options[select.selectedIndex];
+                if (!selectedOption.disabled) parentId = targetVal;
+            }
+
+            const newFolder = {
+                id: 'f_' + Date.now(),
+                name,
+                parentId: parentId,
+                createdAt: Date.now()
+            };
+
+            window.folders.push(newFolder);
+            saveData();
+            
+            input.value = '';
+            populateMoveOptions();
+            select.value = newFolder.id;
+            showToast('已快速建立資料夾', 'success');
+            
+            if(window.currentFolderId === parentId) renderFolderGrid();
+        };
+
+        window.executeBatchMove = function() {
+            const targetVal = document.getElementById('move-target-select').value;
+            if(!targetVal) return;
+            const targetId = targetVal === 'root' ? null : targetVal;
+
+            window.selectedFolders.forEach(id => {
+                const f = window.folders.find(x => x.id === id);
+                if(f) f.parentId = targetId;
+            });
+            window.selectedItems.forEach(id => {
+                const i = window.items.find(x => x.id === id);
+                if(i) i.folderId = targetId;
+            });
+
+            saveData();
+            closeMoveModal();
+            clearSelection();
+            showToast('已成功移動項目', 'success');
+        };
+
+        window.confirmBatchDelete = function() {
+            const total = window.selectedFolders.size + window.selectedItems.size;
+            openConfirmModal(`確認刪除這 ${total} 個項目？`, '刪除資料夾會將其內部的所有資料夾與商品一併刪除。', () => {
+                window.items = window.items.filter(i => !window.selectedItems.has(i.id));
+
+                const foldersToDelete = new Set(window.selectedFolders);
+                const addDescendants = (parentId) => {
+                    window.folders.filter(f => f.parentId === parentId).forEach(child => {
+                        foldersToDelete.add(child.id);
+                        addDescendants(child.id);
+                    });
+                };
+                window.selectedFolders.forEach(fid => addDescendants(fid));
+
+                window.folders = window.folders.filter(f => !foldersToDelete.has(f.id));
+                window.items = window.items.filter(i => !foldersToDelete.has(i.folderId));
+
+                saveData();
+                clearSelection();
+                showToast('已刪除選取項目', 'success');
+            });
+        };
+
+        window.openFolderModal = function() {
+            document.getElementById('folder-name-input').value = '';
+            const modal = document.getElementById('folder-modal');
+            const content = document.getElementById('folder-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                document.getElementById('folder-name-input').focus();
+            }, 10);
+        };
+
+        window.closeFolderModal = function() {
+            const modal = document.getElementById('folder-modal');
+            const content = document.getElementById('folder-modal-content');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        };
+
+        window.handleFolderSubmit = function(e) {
+            e.preventDefault();
+            const name = document.getElementById('folder-name-input').value.trim();
+            if(!name) return;
+            window.folders.push({
+                id: 'f_' + Date.now(),
+                name,
+                parentId: window.currentFolderId,
+                createdAt: Date.now()
+            });
+            saveData();
+            closeFolderModal();
+            renderFolderGrid();
+            showToast('資料夾已建立', 'success');
+        };
+
+        window.openItemModal = function(itemId = null) {
+            const form = document.getElementById('item-form');
+            form.reset();
+            window.currentImageBase64 = '';
+            document.getElementById('image-preview').classList.add('hidden');
+            document.getElementById('remove-image-btn').classList.add('hidden');
+            
+            if(itemId) {
+                document.getElementById('item-modal-title').innerHTML = '<i class="fa-solid fa-pen text-khaki-500"></i> 編輯商品';
+                const item = window.items.find(i => i.id === itemId);
+                if(item) {
+                    document.getElementById('item-id').value = item.id;
+                    document.getElementById('item-name').value = item.name;
+                    document.getElementById('item-note').value = item.note || '';
+                    document.getElementById('item-quantity').value = item.quantity;
+                    document.getElementById('item-font-weight').value = item.style.fontWeight;
+                    document.getElementById('item-text-color').value = item.style.color;
+                    document.getElementById('item-text-color-hex').value = item.style.color;
+                    document.getElementById('item-bg-color').value = item.style.bgColor;
+                    document.getElementById('item-bg-color-hex').value = item.style.bgColor;
+                    if(item.image) {
+                        window.currentImageBase64 = item.image;
+                        const img = document.getElementById('image-preview');
+                        img.src = item.image;
+                        img.classList.remove('hidden');
+                        document.getElementById('remove-image-btn').classList.remove('hidden');
+                    }
+                }
+            } else {
+                document.getElementById('item-modal-title').innerHTML = '<i class="fa-solid fa-box text-khaki-500"></i> 新增商品';
+                document.getElementById('item-id').value = '';
+            }
+
+            const modal = document.getElementById('item-modal');
+            const content = document.getElementById('item-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.remove('scale-95', 'opacity-0'), 10);
+        };
+
+        window.closeItemModal = function() {
+            const modal = document.getElementById('item-modal');
+            const content = document.getElementById('item-modal-content');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        };
+
+        // 圖片上傳與壓縮 (避免雲端 Base64 檔案過大)
+        window.handleImageSelect = function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDim = 300; // 縮圖大小 300px
+                    if (width > height) {
+                        if (width > maxDim) { height = Math.round((height * maxDim) / width); width = maxDim; }
+                    } else {
+                        if (height > maxDim) { width = Math.round((width * maxDim) / height); height = maxDim; }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    window.currentImageBase64 = canvas.toDataURL('image/jpeg', 0.75);
+                    const preview = document.getElementById('image-preview');
+                    preview.src = window.currentImageBase64;
+                    preview.classList.remove('hidden');
+                    document.getElementById('remove-image-btn').classList.remove('hidden');
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.removeImage = function() {
+            window.currentImageBase64 = '';
+            document.getElementById('image-preview').classList.add('hidden');
+            document.getElementById('remove-image-btn').classList.add('hidden');
+            document.getElementById('item-image-input').value = '';
+        };
+
+        window.handleItemSubmit = function(e) {
+            e.preventDefault();
+            const id = document.getElementById('item-id').value;
+            const name = document.getElementById('item-name').value.trim();
+            const data = {
+                name,
+                note: document.getElementById('item-note').value.trim(),
+                quantity: parseInt(document.getElementById('item-quantity').value)||0,
+                folderId: window.currentFolderId,
+                image: window.currentImageBase64,
+                style: {
+                    fontWeight: document.getElementById('item-font-weight').value,
+                    color: document.getElementById('item-text-color-hex').value,
+                    bgColor: document.getElementById('item-bg-color-hex').value
+                }
+            };
+
+            if(id) {
+                const idx = window.items.findIndex(i => i.id === id);
+                if(idx > -1) window.items[idx] = { ...window.items[idx], ...data };
+            } else {
+                window.items.push({ id: 'i_' + Date.now(), createdAt: Date.now(), ...data });
+            }
+
+            saveData();
+            closeItemModal();
+            renderItemsTable();
+            showToast('商品已儲存', 'success');
+        };
+
+        function openConfirmModal(title, msg, callback) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-msg').textContent = msg;
+            window.confirmActionCallback = callback;
+            
+            const modal = document.getElementById('confirm-modal');
+            const content = document.getElementById('confirm-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.remove('scale-95', 'opacity-0'), 10);
+        }
+
+        window.closeConfirmModal = function() {
+            const modal = document.getElementById('confirm-modal');
+            const content = document.getElementById('confirm-modal-content');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+            window.confirmActionCallback = null;
+        };
+
+        document.getElementById('confirm-btn').onclick = () => {
+            if(window.confirmActionCallback) window.confirmActionCallback();
+            closeConfirmModal();
+        };
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
