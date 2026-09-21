@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>典雅卡其庫存管理 App</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome 圖示 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- SheetJS (Excel .xlsx 匯出) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- html2pdf.js (PDF 繁體中文表格匯出) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    body {
+      background-color: #FAF8F5;
+      color: #3A322C;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    /* 隱藏捲動條但保留滾動功能 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* 強制表格在手機端不爆開、不產生水平捲動 */
+    table { table-layout: fixed; width: 100%; }
+    th, td { overflow: hidden; text-overflow: ellipsis; }
+
+    /* 按鈕與卡片質感陰影 */
+    .khaki-card {
+      background-color: #FFFFFF;
+      border: 1px solid #E8DFD8;
+      box-shadow: 0 4px 12px rgba(166, 128, 101, 0.05);
+    }
+    .khaki-btn-primary {
+      background-color: #A68065;
+      color: #FFFFFF;
+    }
+    .khaki-btn-primary:hover {
+      background-color: #8C684F;
+    }
+    .khaki-btn-secondary {
+      background-color: #F2ECE7;
+      color: #6E5848;
+    }
+    .khaki-btn-secondary:hover {
+      background-color: #E6DDD5;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- 頂部導覽列 -->
+  <header class="bg-white border-b border-[#E8DFD8] sticky top-0 z-30 shadow-sm">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl bg-[#A68065] text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          <i class="fa-solid fa-boxes-stacked text-sm"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-base text-[#3A322C] leading-tight">庫存總覽</h1>
+          <p class="text-[11px] text-[#A68065]" id="headerStats">載入中...</p>
+        </div>
+      </div>
+
+      <!-- 右側動作按鈕區 -->
+      <div class="flex items-center gap-2">
+        <!-- 匯出檔案按鈕（替換了原先的 Google 登入按鈕） -->
+        <button onclick="openExportModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-medium khaki-btn-primary flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform" title="下載 / 匯出檔案">
+          <i class="fa-solid fa-file-arrow-down text-sm"></i>
+          <span>匯出檔案</span>
+        </button>
+
+        <!-- JSON 備份選單按鈕 -->
+        <button onclick="openJsonModal()" class="w-8 h-8 rounded-lg khaki-btn-secondary flex items-center justify-center text-xs active:scale-95 transition-transform" title="JSON 備份與匯入">
+          <i class="fa-solid fa-database"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容區塊 -->
+  <main class="max-w-md mx-auto px-3 pt-3">
+
+    <!-- 麵包屑導覽 (Breadcrumbs) -->
+    <nav class="flex items-center gap-1.5 text-xs text-[#8C7A6B] mb-3 overflow-x-auto no-scrollbar py-1" id="breadcrumbs">
+      <!-- 動態渲染層級路徑 -->
+    </nav>
+
+    <!-- 工具列：新增資料夾與新增商品 -->
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <div class="flex items-center gap-2">
+        <button onclick="openFolderModal()" class="px-3 py-1.5 rounded-lg bg-white border border-[#E8DFD8] text-xs font-medium text-[#6E5848] flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
+          <i class="fa-solid fa-folder-plus text-[#A68065]"></i>
+          <span>新增資料夾</span>
+        </button>
+      </div>
+      <button onclick="openItemModal()" class="px-3.5 py-1.5 rounded-lg khaki-btn-primary text-xs font-medium flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
+        <i class="fa-solid fa-plus"></i>
+        <span>新增商品</span>
+      </button>
+    </div>
+
+    <!-- 1. 子資料夾區塊 (網格展示) -->
+    <div id="folderSection" class="mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-[#8C7A6B] flex items-center gap-1">
+          <i class="fa-solid fa-folder-open text-[#A68065]"></i> 資料夾 (<span id="folderCount">0</span>)
+        </span>
+      </div>
+      <div id="folderGrid" class="grid grid-cols-2 gap-2.5">
+        <!-- 動態渲染資料夾卡片 -->
+      </div>
+    </div>
+
+    <!-- 2. 商品列表區塊 -->
+    <div class="khaki-card rounded-2xl p-3">
+      <div class="flex items-center justify-between mb-2.5">
+        <span class="text-xs font-semibold text-[#8C7A6B] flex items-center gap-1">
+          <i class="fa-solid fa-list-check text-[#A68065]"></i> 內容商品 (<span id="itemCount">0</span>)
+        </span>
+      </div>
+
+      <!-- 關鍵字搜尋欄 -->
+      <div class="relative mb-3">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#A68065]"></i>
+        <input type="text" id="searchInput" oninput="handleSearch()" placeholder="搜尋商品名稱..." class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-[#FAF8F5] border border-[#E8DFD8] focus:outline-none focus:border-[#A68065] text-[#3A322C]">
+      </div>
+
+      <!-- 商品表格 (極致滿版自適應，無橫向滾動條) -->
+      <div class="rounded-xl overflow-hidden border border-[#E8DFD8]">
+        <table>
+          <colgroup>
+            <col style="width: 28px;">  <!-- Checkbox -->
+            <col style="width: 42px;">  <!-- 圖片 -->
+            <col style="width: auto;">  <!-- 名稱與備註 -->
+            <col style="width: 98px;">  <!-- 庫存增減區 -->
+            <col style="width: 34px;">  <!-- 操作 -->
+          </colgroup>
+          <thead class="bg-[#F7F3EE] border-b border-[#E8DFD8] text-[11px] text-[#6E5848]">
+            <tr>
+              <th class="py-2 text-center">
+                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllItems(this.checked)" class="rounded border-[#D0C4B8] text-[#A68065] focus:ring-0 cursor-pointer">
+              </th>
+              <th class="py-2 text-left pl-1">圖片</th>
+              
+              <!-- 名稱欄位 + 排序箭頭 -->
+              <th class="py-2 text-left cursor-pointer select-none" onclick="toggleSort('name')">
+                <div class="flex items-center gap-1">
+                  <span>名稱/備註</span>
+                  <span id="sortIconName" class="text-[10px] text-[#A68065]"><i class="fa-solid fa-sort"></i></span>
+                </div>
+              </th>
+
+              <!-- 庫存數量欄位 + 排序箭頭 -->
+              <th class="py-2 text-center cursor-pointer select-none" onclick="toggleSort('quantity')">
+                <div class="flex items-center justify-center gap-1">
+                  <span>庫存</span>
+                  <span id="sortIconQty" class="text-[10px] text-[#A68065]"><i class="fa-solid fa-sort"></i></span>
+                </div>
+              </th>
+
+              <th class="py-2 text-center pr-1">操作</th>
+            </tr>
+          </thead>
+          <tbody id="itemTableBody" class="divide-y divide-[#F0E8E1] text-xs">
+            <!-- 動態渲染商品列表 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 浮動批次操作工具列 (當有勾選項目時彈出) -->
+  <div id="batchActionBar" class="fixed bottom-4 left-1/2 -translate-x-1/2 max-w-md w-[92%] bg-[#3A322C] text-white rounded-2xl px-4 py-3 shadow-2xl flex items-center justify-between z-40 transition-all duration-300 transform translate-y-24 opacity-0 pointer-events-none">
+    <div class="text-xs text-[#E8DFD8]">
+      已選取 <span id="batchSelectedCount" class="font-bold text-white text-sm">0</span> 項
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="openMoveModal()" class="px-3 py-1.5 rounded-xl bg-[#A68065] hover:bg-[#8C684F] text-xs font-medium flex items-center gap-1 active:scale-95 transition-transform">
+        <i class="fa-solid fa-folder-tree"></i>
+        <span>移動至...</span>
+      </button>
+      <button onclick="batchDelete()" class="px-3 py-1.5 rounded-xl bg-red-800 hover:bg-red-700 text-xs font-medium flex items-center gap-1 active:scale-95 transition-transform">
+        <i class="fa-solid fa-trash"></i>
+        <span>刪除</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== 模態視窗 MODALS ==================== -->
+
+  <!-- 1. 匯出/下載檔案視窗 (PDF / Excel) -->
+  <div id="exportModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-[#E8DFD8]">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-base text-[#3A322C] flex items-center gap-2">
+          <i class="fa-solid fa-file-arrow-down text-[#A68065]"></i>
+          <span>匯出庫存報表</span>
+        </h3>
+        <button onclick="closeExportModal()" class="text-[#8C7A6B] hover:text-[#3A322C]"><i class="fa-solid fa-xmark text-base"></i></button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- 匯出範圍選擇 -->
+        <div>
+          <label class="block text-xs font-semibold text-[#6E5848] mb-1.5">選擇匯出範圍</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="border border-[#E8DFD8] rounded-xl p-2.5 flex items-center gap-2 cursor-pointer bg-[#FAF8F5] has-[:checked]:border-[#A68065] has-[:checked]:bg-[#F7F3EE]">
+              <input type="radio" name="exportScope" value="current" checked class="text-[#A68065] focus:ring-0">
+              <span class="text-xs text-[#3A322C] font-medium">當前資料夾</span>
+            </label>
+            <label class="border border-[#E8DFD8] rounded-xl p-2.5 flex items-center gap-2 cursor-pointer bg-[#FAF8F5] has-[:checked]:border-[#A68065] has-[:checked]:bg-[#F7F3EE]">
+              <input type="radio" name="exportScope" value="all" class="text-[#A68065] focus:ring-0">
+              <span class="text-xs text-[#3A322C] font-medium">全部庫存商品</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 匯出格式按鈕 -->
+        <div>
+          <label class="block text-xs font-semibold text-[#6E5848] mb-1.5">選擇下載格式</label>
+          <div class="space-y-2">
+            <!-- 下載 PDF -->
+            <button onclick="generatePDF()" class="w-full py-2.5 px-3 rounded-xl border border-[#E8DFD8] bg-white hover:bg-[#FAF8F5] flex items-center justify-between text-left transition-colors group">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-sm">
+                  <i class="fa-solid fa-file-pdf"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-[#3A322C]">PDF 表格文件 (.pdf)</div>
+                  <div class="text-[10px] text-[#8C7A6B]">包含精美標題與清晰表格，適合列印</div>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-[#D0C4B8] group-hover:text-[#A68065]"></i>
+            </button>
+
+            <!-- 下載 Excel -->
+            <button onclick="generateExcel()" class="w-full py-2.5 px-3 rounded-xl border border-[#E8DFD8] bg-white hover:bg-[#FAF8F5] flex items-center justify-between text-left transition-colors group">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">
+                  <i class="fa-solid fa-file-excel"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-[#3A322C]">Excel 試算表 (.xlsx)</div>
+                  <div class="text-[10px] text-[#8C7A6B]">標準試算表，方便資料統計與分析</div>
+                </div>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-[#D0C4B8] group-hover:text-[#A68065]"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 flex justify-end">
+        <button onclick="closeExportModal()" class="px-4 py-1.5 rounded-xl text-xs font-medium khaki-btn-secondary">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 移動至資料夾 modal (字體放大 1.5 倍 + 快速新增資料夾) -->
+  <div id="moveModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-[#E8DFD8]">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-bold text-lg text-[#3A322C] flex items-center gap-2">
+          <i class="fa-solid fa-folder-tree text-[#A68065]"></i>
+          <span>移動至資料夾</span>
+        </h3>
+        <button onclick="closeMoveModal()" class="text-[#8C7A6B] hover:text-[#3A322C]"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <!-- 選單內「快速新增資料夾」區塊 -->
+      <div class="mb-3 p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E8DFD8]">
+        <label class="block text-xs font-medium text-[#6E5848] mb-1">快速在此層級建立新資料夾：</label>
+        <div class="flex gap-2">
+          <input type="text" id="quickFolderName" placeholder="輸入資料夾名稱..." class="flex-1 px-2.5 py-1.5 text-sm rounded-lg border border-[#E8DFD8] focus:outline-none focus:border-[#A68065]">
+          <button onclick="quickCreateFolderInMoveModal()" class="px-3 py-1.5 rounded-lg khaki-btn-primary text-xs font-medium flex items-center gap-1 shrink-0">
+            <i class="fa-solid fa-plus"></i> 新增
+          </button>
+        </div>
+      </div>
+
+      <!-- 樹狀目錄區塊 (字體放大 1.5 倍：text-base ~ text-lg) -->
+      <p class="text-xs text-[#8C7A6B] mb-2">請選擇目標資料夾：</p>
+      <div id="moveFolderTree" class="max-h-60 overflow-y-auto rounded-xl border border-[#E8DFD8] p-3 space-y-1 bg-[#FAF8F5] text-base">
+        <!-- 動態渲染資料夾樹狀選單 -->
+      </div>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <button onclick="closeMoveModal()" class="px-4 py-2 rounded-xl text-sm font-medium khaki-btn-secondary">取消</button>
+        <button onclick="confirmMove()" class="px-4 py-2 rounded-xl text-sm font-medium khaki-btn-primary">確認移動</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 新增/編輯商品 Modal -->
+  <div id="itemModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-[#E8DFD8] max-h-[90vh] overflow-y-auto">
+      <h3 class="font-bold text-base text-[#3A322C] mb-4 flex items-center gap-2" id="itemModalTitle">
+        <i class="fa-solid fa-box text-[#A68065]"></i> 新增商品
+      </h3>
+      
+      <form id="itemForm" onsubmit="handleItemFormSubmit(event)" class="space-y-3">
+        <input type="hidden" id="itemId">
+
+        <!-- 商品名稱 -->
+        <div>
+          <label class="block text-xs font-semibold text-[#6E5848] mb-1">商品名稱 *</label>
+          <input type="text" id="itemName" required placeholder="如：韓系刺繡上衣" class="w-full px-3 py-1.5 text-xs rounded-xl border border-[#E8DFD8] focus:outline-none focus:border-[#A68065]">
+        </div>
+
+        <!-- 數量與備註 -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-[#6E5848] mb-1">初始庫存數量</label>
+            <input type="number" id="itemQty" value="1" min="0" class="w-full px-3 py-1.5 text-xs rounded-xl border border-[#E8DFD8] focus:outline-none focus:border-[#A68065]">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-[#6E5848] mb-1">備註/規格</label>
+            <input type="text" id="itemNote" placeholder="如：米白色 M號" class="w-full px-3 py-1.5 text-xs rounded-xl border border-[#E8DFD8] focus:outline-none focus:border-[#A68065]">
+          </div>
+        </div>
+
+        <!-- 圖片上傳 -->
+        <div>
+          <label class="block text-xs font-semibold text-[#6E5848] mb-1">商品圖片</label>
+          <div class="flex items-center gap-3">
+            <div id="imagePreview" class="w-12 h-12 rounded-xl border border-[#E8DFD8] bg-[#FAF8F5] flex items-center justify-center overflow-hidden shrink-0">
+              <i class="fa-solid fa-image text-[#D0C4B8]"></i>
+            </div>
+            <input type="file" id="itemImageInput" accept="image/*" onchange="handleImageUpload(event)" class="text-xs text-[#8C7A6B] file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:bg-[#F2ECE7] file:text-[#6E5848] hover:file:bg-[#E6DDD5]">
+          </div>
+        </div>
+
+        <!-- 樣式設定：文字粗細、顏色、格子背景色 -->
+        <div class="p-3 bg-[#FAF8F5] rounded-xl border border-[#E8DFD8] space-y-2">
+          <div class="text-[11px] font-bold text-[#A68065]">視覺卡片客製化</div>
+          
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-[#6E5848] mb-1">字體粗細</label>
+              <select id="itemFontWeight" class="w-full px-2 py-1 text-xs rounded-lg border border-[#E8DFD8] bg-white">
+                <option value="normal">標準 Normal</option>
+                <option value="500">中等 Medium</option>
+                <option value="bold" selected>粗體 Bold</option>
+                <option value="900">特粗 Heavy</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] text-[#6E5848] mb-1">文字顏色</label>
+              <input type="color" id="itemTextColor" value="#3A322C" class="w-full h-7 p-0.5 rounded-lg border border-[#E8DFD8] bg-white cursor-pointer">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-[#6E5848] mb-1">格子背景顏色</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="itemBgColor" value="#FFFFFF" class="w-7 h-7 p-0.5 rounded-lg border border-[#E8DFD8] bg-white cursor-pointer">
+              <span class="text-[10px] text-[#8C7A6B]">預設多款柔和卡其色：</span>
+              <div class="flex gap-1">
+                <button type="button" onclick="setPresetBg('#FFFFFF')" class="w-5 h-5 rounded border border-[#E8DFD8] bg-white" title="白色"></button>
+                <button type="button" onclick="setPresetBg('#FFFDF9')" class="w-5 h-5 rounded border border-[#E8DFD8] bg-[#FFFDF9]" title="奶白"></button>
+                <button type="button" onclick="setPresetBg('#F9F5F0')" class="w-5 h-5 rounded border border-[#E8DFD8] bg-[#F9F5F0]" title="淺卡其"></button>
+                <button type="button" onclick="setPresetBg('#FFF8E7')" class="w-5 h-5 rounded border border-[#E8DFD8] bg-[#FFF8E7]" title="暖鵝黃"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" onclick="closeItemModal()" class="px-3.5 py-1.5 rounded-xl text-xs font-medium khaki-btn-secondary">取消</button>
+          <button type="submit" class="px-4 py-1.5 rounded-xl text-xs font-medium khaki-btn-primary">儲存商品</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. 新增/編輯資料夾 Modal -->
+  <div id="folderModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-[#E8DFD8]">
+      <h3 class="font-bold text-base text-[#3A322C] mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-folder-plus text-[#A68065]"></i> 新增資料夾
+      </h3>
+      <input type="text" id="folderNameInput" placeholder="輸入資料夾名稱 (如：上衣)" class="w-full px-3 py-1.5 text-xs rounded-xl border border-[#E8DFD8] focus:outline-none focus:border-[#A68065] mb-4">
+      <div class="flex justify-end gap-2">
+        <button onclick="closeFolderModal()" class="px-3.5 py-1.5 rounded-xl text-xs font-medium khaki-btn-secondary">取消</button>
+        <button onclick="saveFolder()" class="px-4 py-1.5 rounded-xl text-xs font-medium khaki-btn-primary">建立</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. JSON 備份視窗 -->
+  <div id="jsonModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-[#E8DFD8]">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-bold text-base text-[#3A322C]">JSON 資料備份與匯入</h3>
+        <button onclick="closeJsonModal()" class="text-[#8C7A6B]"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-xs text-[#8C7A6B] mb-4">您可以備份所有庫存資料為 JSON 檔案，或從其他裝置匯入還原。</p>
+      
+      <div class="space-y-2">
+        <button onclick="exportJsonBackup()" class="w-full py-2 px-3 rounded-xl khaki-btn-primary text-xs font-medium flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download"></i> 下載 JSON 備份檔案
+        </button>
+        
+        <label class="w-full py-2 px-3 rounded-xl khaki-btn-secondary text-xs font-medium flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-solid fa-upload"></i> 匯入 JSON 備份檔
+          <input type="file" accept=".json" onchange="importJsonBackup(event)" class="hidden">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript 應用程式核心邏輯 -->
+  <script>
+    // 預設示範資料
+    const defaultData = {
+      folders: [
+        { id: 'f_clothing', name: '服飾類', parentId: null },
+        { id: 'f_tops', name: '上衣目錄', parentId: 'f_clothing' },
+        { id: 'f_bottoms', name: '下裝目錄', parentId: 'f_clothing' }
+      ],
+      items: [
+        { id: 'i1', name: '韓系針織上衣', quantity: 18, note: '米白色 F碼', folderId: 'f_tops', image: '', style: { fontWeight: 'bold', color: '#3A322C', bgColor: '#FFFFFF' } },
+        { id: 'i2', name: '高腰彎刀牛仔褲', quantity: 9, note: '復古藍 M號', folderId: 'f_bottoms', image: '', style: { fontWeight: 'bold', color: '#8C684F', bgColor: '#FFFDF9' } }
+      ]
+    };
+
+    // 應用程式狀態
+    let appData = loadLocalData();
+    let currentFolderId = null; // null 表示主目錄 (Root)
+    let selectedItems = new Set();
+    let selectedFolders = new Set();
+    let targetMoveFolderId = null;
+    let currentImageBase64 = '';
+    
+    // 排序狀態: sortField = 'none' | 'name' | 'quantity', sortOrder = 'asc' | 'desc'
+    let sortField = 'none';
+    let sortOrder = 'asc';
+    let searchQuery = '';
+
+    // ==================== 初始化 & 資料持久化 ====================
+    function loadLocalData() {
+      const saved = localStorage.getItem('khaki_inventory_app_v2');
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+      return defaultData;
+    }
+
+    function saveData() {
+      localStorage.setItem('khaki_inventory_app_v2', JSON.stringify(appData));
+      render();
+    }
+
+    // ==================== 畫面渲染邏輯 (RENDER) ====================
+    function render() {
+      renderHeaderStats();
+      renderBreadcrumbs();
+      renderFolders();
+      renderItems();
+      updateBatchActionBar();
+    }
+
+    // 統計數據
+    function renderHeaderStats() {
+      const totalItems = appData.items.length;
+      const totalQty = appData.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      document.getElementById('headerStats').innerText = `總計 ${appData.folders.length} 資料夾 | ${totalItems} 品項 | 庫存 ${totalQty}`;
+    }
+
+    // 麵包屑層級
+    function renderBreadcrumbs() {
+      const container = document.getElementById('breadcrumbs');
+      let html = `<button onclick="navigateToFolder(null)" class="hover:underline flex items-center gap-1 shrink-0 ${currentFolderId === null ? 'font-bold text-[#A68065]' : ''}">
+        <i class="fa-solid fa-house"></i> 主目錄
+      </button>`;
+
+      if (currentFolderId) {
+        const path = getFolderPath(currentFolderId);
+        path.forEach((f, index) => {
+          const isLast = index === path.length - 1;
+          html += `<span class="text-[#D0C4B8] shrink-0">/</span>`;
+          html += `<button onclick="navigateToFolder('${f.id}')" class="hover:underline shrink-0 ${isLast ? 'font-bold text-[#A68065]' : ''}">${f.name}</button>`;
+        });
+      }
+      container.innerHTML = html;
+    }
+
+    function getFolderPath(folderId) {
+      const path = [];
+      let curr = appData.folders.find(f => f.id === folderId);
+      while (curr) {
+        path.unshift(curr);
+        curr = appData.folders.find(f => f.id === curr.parentId);
+      }
+      return path;
+    }
+
+    function getFolderPathName(folderId) {
+      if (!folderId) return '主目錄';
+      const path = getFolderPath(folderId);
+      return path.map(p => p.name).join(' / ');
+    }
+
+    // 切換層級
+    function navigateToFolder(folderId) {
+      currentFolderId = folderId;
+      selectedItems.clear();
+      selectedFolders.clear();
+      render();
+    }
+
+    // 渲染子資料夾
+    function renderFolders() {
+      const grid = document.getElementById('folderGrid');
+      const subFolders = appData.folders.filter(f => f.parentId === currentFolderId);
+      document.getElementById('folderCount').innerText = subFolders.length;
+
+      if (subFolders.length === 0) {
+        document.getElementById('folderSection').classList.add('hidden');
+        return;
+      }
+      document.getElementById('folderSection').classList.remove('hidden');
+
+      grid.innerHTML = subFolders.map(f => {
+        const itemCount = appData.items.filter(i => i.folderId === f.id).length;
+        const isChecked = selectedFolders.has(f.id);
+
+        return `
+          <div class="bg-white border border-[#E8DFD8] rounded-xl p-2.5 flex items-center justify-between shadow-sm relative group hover:border-[#A68065] transition-colors">
+            <div class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onclick="navigateToFolder('${f.id}')">
+              <div class="w-8 h-8 rounded-lg bg-[#F7F3EE] text-[#A68065] flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-folder text-base"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-bold text-[#3A322C] truncate">${f.name}</div>
+                <div class="text-[10px] text-[#8C7A6B]">${itemCount} 個商品</div>
+              </div>
+            </div>
+
+            <!-- 勾選框與操作 -->
+            <div class="flex items-center gap-1 shrink-0 ml-1">
+              <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSelectFolder('${f.id}', this.checked)" class="rounded border-[#D0C4B8] text-[#A68065] focus:ring-0 cursor-pointer">
+              <button onclick="deleteFolder('${f.id}')" class="text-[#D0C4B8] hover:text-red-700 p-1 text-xs"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 渲染商品列表 (套用排序與關鍵字搜尋)
+    function renderItems() {
+      const tbody = document.getElementById('itemTableBody');
+      let items = appData.items.filter(i => i.folderId === currentFolderId);
+
+      // 搜尋過濾
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase();
+        items = items.filter(i => i.name.toLowerCase().includes(q) || (i.note && i.note.toLowerCase().includes(q)));
+      }
+
+      // 排序邏輯
+      if (sortField === 'name') {
+        items.sort((a, b) => {
+          const res = a.name.localeCompare(b.name, 'zh-Hant');
+          return sortOrder === 'asc' ? res : -res;
+        });
+      } else if (sortField === 'quantity') {
+        items.sort((a, b) => {
+          return sortOrder === 'asc' ? (a.quantity - b.quantity) : (b.quantity - a.quantity);
+        });
+      }
+
+      document.getElementById('itemCount').innerText = items.length;
+      updateSortIcons();
+
+      if (items.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-8 text-center text-[#8C7A6B]">
+              <i class="fa-solid fa-box-open text-2xl text-[#D0C4B8] mb-1 block"></i>
+              <span>此資料夾為空或無符合搜尋的商品</span>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = items.map(item => {
+        const isChecked = selectedItems.has(item.id);
+        const style = item.style || { fontWeight: 'bold', color: '#3A322C', bgColor: '#FFFFFF' };
+
+        return `
+          <tr style="background-color: ${style.bgColor || '#FFFFFF'};">
+            <!-- 勾選框 -->
+            <td class="py-2 text-center">
+              <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSelectItem('${item.id}', this.checked)" class="rounded border-[#D0C4B8] text-[#A68065] focus:ring-0 cursor-pointer">
+            </td>
+
+            <!-- 圖片 -->
+            <td class="py-2 pl-1">
+              <div class="w-8 h-8 rounded-lg bg-[#FAF8F5] border border-[#E8DFD8] flex items-center justify-center overflow-hidden shrink-0">
+                ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-image text-[#D0C4B8] text-xs"></i>`}
+              </div>
+            </td>
+
+            <!-- 商品名稱與備註 -->
+            <td class="py-2 pr-1 min-w-0">
+              <div class="truncate text-xs" style="font-weight: ${style.fontWeight || 'bold'}; color: ${style.color || '#3A322C'};">
+                ${item.name}
+              </div>
+              ${item.note ? `<div class="text-[10px] text-[#8C7A6B] truncate">${item.note}</div>` : ''}
+            </td>
+
+            <!-- 庫存數量 (- / 數字 / +) -->
+            <td class="py-2 text-center">
+              <div class="inline-flex items-center border border-[#E8DFD8] rounded-lg bg-white overflow-hidden shadow-sm">
+                <button onclick="updateQty('${item.id}', -1)" class="w-6 h-6 text-[#6E5848] hover:bg-[#F7F3EE] active:scale-95 text-xs font-bold flex items-center justify-center">-</button>
+                <input type="number" value="${item.quantity}" onchange="setQty('${item.id}', this.value)" class="w-8 text-center text-xs font-bold text-[#3A322C] focus:outline-none p-0 border-0">
+                <button onclick="updateQty('${item.id}', 1)" class="w-6 h-6 text-[#6E5848] hover:bg-[#F7F3EE] active:scale-95 text-xs font-bold flex items-center justify-center">+</button>
+              </div>
+            </td>
+
+            <!-- 操作 -->
+            <td class="py-2 text-center pr-1">
+              <div class="flex items-center justify-center gap-1">
+                <button onclick="editItem('${item.id}')" class="text-[#A68065] hover:text-[#8C684F] p-1"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="deleteItem('${item.id}')" class="text-[#D0C4B8] hover:text-red-600 p-1"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 搜尋功能
+    function handleSearch() {
+      searchQuery = document.getElementById('searchInput').value;
+      renderItems();
+    }
+
+    // 排序切換
+    function toggleSort(field) {
+      if (sortField === field) {
+        if (sortOrder === 'asc') {
+          sortOrder = 'desc';
+        } else {
+          sortField = 'none';
+          sortOrder = 'asc';
+        }
+      } else {
+        sortField = field;
+        sortOrder = 'asc';
+      }
+      renderItems();
+    }
+
+    function updateSortIcons() {
+      const nameIcon = document.getElementById('sortIconName');
+      const qtyIcon = document.getElementById('sortIconQty');
+
+      nameIcon.innerHTML = `<i class="fa-solid fa-sort text-[#D0C4B8]"></i>`;
+      qtyIcon.innerHTML = `<i class="fa-solid fa-sort text-[#D0C4B8]"></i>`;
+
+      if (sortField === 'name') {
+        nameIcon.innerHTML = sortOrder === 'asc' ? `<i class="fa-solid fa-arrow-down-a-z"></i>` : `<i class="fa-solid fa-arrow-up-z-a"></i>`;
+      } else if (sortField === 'quantity') {
+        qtyIcon.innerHTML = sortOrder === 'asc' ? `<i class="fa-solid fa-arrow-up-short-wide"></i>` : `<i class="fa-solid fa-arrow-down-wide-short"></i>`;
+      }
+    }
+
+    // ==================== 庫存數量修改 ====================
+    function updateQty(id, change) {
+      const item = appData.items.find(i => i.id === id);
+      if (item) {
+        item.quantity = Math.max(0, (Number(item.quantity) || 0) + change);
+        saveData();
+      }
+    }
+
+    function setQty(id, value) {
+      const item = appData.items.find(i => i.id === id);
+      if (item) {
+        item.quantity = Math.max(0, parseInt(value) || 0);
+        saveData();
+      }
+    }
+
+    // ==================== 批次選擇與動作 ====================
+    function toggleSelectItem(id, checked) {
+      if (checked) selectedItems.add(id);
+      else selectedItems.delete(id);
+      updateBatchActionBar();
+    }
+
+    function toggleSelectFolder(id, checked) {
+      if (checked) selectedFolders.add(id);
+      else selectedFolders.delete(id);
+      updateBatchActionBar();
+    }
+
+    function toggleSelectAllItems(checked) {
+      const currentItems = appData.items.filter(i => i.folderId === currentFolderId);
+      currentItems.forEach(i => {
+        if (checked) selectedItems.add(i.id);
+        else selectedItems.delete(i.id);
+      });
+      renderItems();
+      updateBatchActionBar();
+    }
+
+    function updateBatchActionBar() {
+      const total = selectedItems.size + selectedFolders.size;
+      const bar = document.getElementById('batchActionBar');
+      document.getElementById('batchSelectedCount').innerText = total;
+
+      if (total > 0) {
+        bar.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+      } else {
+        bar.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+      }
+    }
+
+    function batchDelete() {
+      if (!confirm(`確定要刪除選取的 ${selectedItems.size} 個商品與 ${selectedFolders.size} 個資料夾嗎？`)) return;
+
+      appData.items = appData.items.filter(i => !selectedItems.has(i.id));
+      appData.folders = appData.folders.filter(f => !selectedFolders.has(f.id));
+
+      selectedItems.clear();
+      selectedFolders.clear();
+      saveData();
+    }
+
+    // ==================== 📥 匯出 / 下載檔案 (PDF & Excel) ====================
+    function openExportModal() {
+      document.getElementById('exportModal').classList.remove('hidden');
+    }
+
+    function closeExportModal() {
+      document.getElementById('exportModal').classList.add('hidden');
+    }
+
+    function getExportScopeData() {
+      const scope = document.querySelector('input[name="exportScope"]:checked').value;
+      let itemsToExport = [];
+      let scopeName = "全部庫存";
+
+      if (scope === 'current') {
+        itemsToExport = appData.items.filter(i => i.folderId === currentFolderId);
+        scopeName = getFolderPathName(currentFolderId);
+      } else {
+        itemsToExport = [...appData.items];
+      }
+      return { items: itemsToExport, scopeName };
+    }
+
+    // 1. 產生並下載 PDF 表格
+    function generatePDF() {
+      const { items, scopeName } = getExportScopeData();
+      if (items.length === 0) {
+        alert('沒有可以匯出的商品！');
+        return;
+      }
+
+      // 建立臨時隱藏的 HTML 表格元素進行渲染
+      const printContainer = document.createElement('div');
+      printContainer.style.padding = '20px';
+      printContainer.style.fontFamily = 'sans-serif';
+      printContainer.style.color = '#3A322C';
+
+      const rowsHtml = items.map((item, idx) => `
+        <tr style="border-bottom: 1px solid #E8DFD8; font-size: 11px;">
+          <td style="padding: 6px; text-align: center;">${idx + 1}</td>
+          <td style="padding: 6px;">${getFolderPathName(item.folderId)}</td>
+          <td style="padding: 6px; font-weight: bold; color: ${item.style?.color || '#3A322C'};">${item.name}</td>
+          <td style="padding: 6px; text-align: center; font-weight: bold; color: #A68065;">${item.quantity}</td>
+          <td style="padding: 6px; color: #8C7A6B;">${item.note || '-'}</td>
+        </tr>
+      `).join('');
+
+      printContainer.innerHTML = `
+        <div style="text-align: center; margin-bottom: 15px;">
+          <h2 style="font-size: 18px; font-weight: bold; color: #A68065; margin: 0;">庫存管理細項清單</h2>
+          <p style="font-size: 11px; color: #8C7A6B; margin-top: 4px;">匯出範圍：${scopeName} | 匯出時間：${new Date().toLocaleString('zh-TW')}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #E8DFD8;">
+          <thead>
+            <tr style="background-color: #A68065; color: #FFFFFF; font-size: 11px;">
+              <th style="padding: 8px; width: 30px;">#</th>
+              <th style="padding: 8px; text-align: left;">資料夾目錄</th>
+              <th style="padding: 8px; text-align: left;">商品名稱</th>
+              <th style="padding: 8px; text-align: center; width: 60px;">數量</th>
+              <th style="padding: 8px; text-align: left;">備註</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+
+      const opt = {
+        margin:       [10, 10, 10, 10],
+        filename:     `庫存報表_${new Date().toISOString().slice(0,10)}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(printContainer).save().then(() => {
+        closeExportModal();
+      });
+    }
+
+    // 2. 產生並下載 Excel 試算表 (.xlsx)
+    function generateExcel() {
+      const { items, scopeName } = getExportScopeData();
+      if (items.length === 0) {
+        alert('沒有可以匯出的商品！');
+        return;
+      }
+
+      const exportData = items.map(item => ({
+        "資料夾目錄": getFolderPathName(item.folderId),
+        "商品名稱": item.name,
+        "庫存數量": item.quantity,
+        "備註/規格": item.note || "",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      worksheet['!cols'] = [
+        { wch: 25 },
+        { wch: 25 },
+        { wch: 12 },
+        { wch: 30 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "庫存清單");
+      XLSX.writeFile(workbook, `庫存資料_${new Date().toISOString().slice(0,10)}.xlsx`);
+      closeExportModal();
+    }
+
+    // ==================== 移動至資料夾 Modal 邏輯 ====================
+    function openMoveModal() {
+      document.getElementById('moveModal').classList.remove('hidden');
+      renderMoveFolderTree();
+    }
+
+    function closeMoveModal() {
+      document.getElementById('moveModal').classList.add('hidden');
+    }
+
+    function renderMoveFolderTree() {
+      const tree = document.getElementById('moveFolderTree');
+      targetMoveFolderId = null;
+
+      let html = `
+        <div onclick="selectTargetFolder(null, this)" class="p-2 rounded-xl flex items-center gap-2 cursor-pointer hover:bg-[#F2ECE7] text-base font-bold text-[#A68065]">
+          <i class="fa-solid fa-house"></i>
+          <span>主目錄 (Root)</span>
+        </div>
+      `;
+
+      function buildTree(parentId, depth = 0) {
+        const subs = appData.folders.filter(f => f.parentId === parentId);
+        subs.forEach(f => {
+          if (selectedFolders.has(f.id)) return; // 避免移入自己
+
+          const indent = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(depth);
+          html += `
+            <div onclick="selectTargetFolder('${f.id}', this)" class="p-2 rounded-xl flex items-center gap-2 cursor-pointer hover:bg-[#F2ECE7] text-base text-[#3A322C]" style="padding-left: ${12 + depth * 16}px">
+              <i class="fa-solid fa-folder text-[#A68065]"></i>
+              <span>${f.name}</span>
+            </div>
+          `;
+          buildTree(f.id, depth + 1);
+        });
+      }
+
+      buildTree(null, 0);
+      tree.innerHTML = html;
+    }
+
+    function selectTargetFolder(folderId, el) {
+      targetMoveFolderId = folderId;
+      const allDivs = document.querySelectorAll('#moveFolderTree div');
+      allDivs.forEach(d => d.classList.remove('bg-[#E6DDD5]', 'font-bold'));
+      el.classList.add('bg-[#E6DDD5]', 'font-bold');
+    }
+
+    function quickCreateFolderInMoveModal() {
+      const nameInput = document.getElementById('quickFolderName');
+      const name = nameInput.value.trim();
+      if (!name) { alert('請輸入資料夾名稱'); return; }
+
+      const newId = 'f_' + Date.now();
+      appData.folders.push({
+        id: newId,
+        name: name,
+        parentId: targetMoveFolderId // 建立在當前選取的目標資料夾底下
+      });
+
+      nameInput.value = '';
+      saveData();
+      renderMoveFolderTree();
+    }
+
+    function confirmMove() {
+      selectedItems.forEach(itemId => {
+        const item = appData.items.find(i => i.id === itemId);
+        if (item) item.folderId = targetMoveFolderId;
+      });
+
+      selectedFolders.forEach(folderId => {
+        const folder = appData.folders.find(f => f.id === folderId);
+        if (folder) folder.parentId = targetMoveFolderId;
+      });
+
+      selectedItems.clear();
+      selectedFolders.clear();
+      closeMoveModal();
+      saveData();
+    }
+
+    // ==================== 商品/資料夾新增與編輯 MODAL ====================
+    function openItemModal(isEdit = false) {
+      document.getElementById('itemModal').classList.remove('hidden');
+      if (!isEdit) {
+        document.getElementById('itemModalTitle').innerText = '新增商品';
+        document.getElementById('itemId').value = '';
+        document.getElementById('itemForm').reset();
+        currentImageBase64 = '';
+        document.getElementById('imagePreview').innerHTML = `<i class="fa-solid fa-image text-[#D0C4B8] text-xs"></i>`;
+      }
+    }
+
+    function closeItemModal() {
+      document.getElementById('itemModal').classList.add('hidden');
+    }
+
+    function editItem(id) {
+      const item = appData.items.find(i => i.id === id);
+      if (!item) return;
+
+      openItemModal(true);
+      document.getElementById('itemModalTitle').innerText = '編輯商品';
+      document.getElementById('itemId').value = item.id;
+      document.getElementById('itemName').value = item.name;
+      document.getElementById('itemQty').value = item.quantity;
+      document.getElementById('itemNote').value = item.note || '';
+      
+      const style = item.style || { fontWeight: 'bold', color: '#3A322C', bgColor: '#FFFFFF' };
+      document.getElementById('itemFontWeight').value = style.fontWeight || 'bold';
+      document.getElementById('itemTextColor').value = style.color || '#3A322C';
+      document.getElementById('itemBgColor').value = style.bgColor || '#FFFFFF';
+
+      currentImageBase64 = item.image || '';
+      if (item.image) {
+        document.getElementById('imagePreview').innerHTML = `<img src="${item.image}" class="w-full h-full object-cover">`;
+      } else {
+        document.getElementById('imagePreview').innerHTML = `<i class="fa-solid fa-image text-[#D0C4B8] text-xs"></i>`;
+      }
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        currentImageBase64 = evt.target.result;
+        document.getElementById('imagePreview').innerHTML = `<img src="${currentImageBase64}" class="w-full h-full object-cover">`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function setPresetBg(color) {
+      document.getElementById('itemBgColor').value = color;
+    }
+
+    function handleItemFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('itemId').value;
+      const name = document.getElementById('itemName').value.trim();
+      const qty = parseInt(document.getElementById('itemQty').value) || 0;
+      const note = document.getElementById('itemNote').value.trim();
+      const fontWeight = document.getElementById('itemFontWeight').value;
+      const color = document.getElementById('itemTextColor').value;
+      const bgColor = document.getElementById('itemBgColor').value;
+
+      if (id) {
+        // 更新
+        const item = appData.items.find(i => i.id === id);
+        if (item) {
+          item.name = name;
+          item.quantity = qty;
+          item.note = note;
+          item.image = currentImageBase64;
+          item.style = { fontWeight, color, bgColor };
+        }
+      } else {
+        // 新增
+        appData.items.push({
+          id: 'i_' + Date.now(),
+          name,
+          quantity: qty,
+          note,
+          folderId: currentFolderId,
+          image: currentImageBase64,
+          style: { fontWeight, color, bgColor }
+        });
+      }
+
+      closeItemModal();
+      saveData();
+    }
+
+    function deleteItem(id) {
+      if (!confirm('確定要刪除這個商品嗎？')) return;
+      appData.items = appData.items.filter(i => i.id !== id);
+      saveData();
+    }
+
+    // 資料夾 Modal
+    function openFolderModal() {
+      document.getElementById('folderModal').classList.remove('hidden');
+      document.getElementById('folderNameInput').value = '';
+    }
+
+    function closeFolderModal() {
+      document.getElementById('folderModal').classList.add('hidden');
+    }
+
+    function saveFolder() {
+      const name = document.getElementById('folderNameInput').value.trim();
+      if (!name) return;
+
+      appData.folders.push({
+        id: 'f_' + Date.now(),
+        name,
+        parentId: currentFolderId
+      });
+
+      closeFolderModal();
+      saveData();
+    }
+
+    function deleteFolder(id) {
+      if (!confirm('確定刪除此資料夾？內含的子資料夾與商品將一併移至主目錄。')) return;
+      appData.folders = appData.folders.filter(f => f.id !== id);
+      // 內含商品移回 Root
+      appData.items.forEach(i => { if (i.folderId === id) i.folderId = null; });
+      saveData();
+    }
+
+    // ==================== JSON 備份 Modal ====================
+    function openJsonModal() {
+      document.getElementById('jsonModal').classList.remove('hidden');
+    }
+
+    function closeJsonModal() {
+      document.getElementById('jsonModal').classList.add('hidden');
+    }
+
+    function exportJsonBackup() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+      const anchor = document.createElement('a');
+      anchor.setAttribute("href", dataStr);
+      anchor.setAttribute("download", `inventory_backup_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
+
+    function importJsonBackup(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const imported = JSON.parse(evt.target.result);
+          if (imported.folders && imported.items) {
+            appData = imported;
+            saveData();
+            alert('成功匯入備份資料！');
+            closeJsonModal();
+          } else {
+            alert('無效的備份檔案格式！');
+          }
+        } catch (err) {
+          alert('解析備份檔案失敗：' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // 初始化渲染
+    render();
+  </script>
+</body>
+</html>
+
