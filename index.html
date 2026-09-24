@@ -921,9 +921,9 @@
                         </div>
                         ${item.note ? `<div style="color:${item.style.color};" class="text-[10px] opacity-80 truncate mt-0.5">${escapeHtml(item.note)}</div>` : ''}
                     </td>
-                    <td class="py-2 px-0.5 text-center font-bold text-khaki-800 text-[11px] sm:text-xs">
-                        ${displayPrice}
-                    </td>
+                    <td class="py-2 px-0.5 text-center font-bold text-[11px] sm:text-xs" style="color:${item.style.color};">
+    ${displayPrice}
+</td>
                     <td class="py-2 px-0.5 text-center">
                         <div class="inline-flex items-center bg-white border border-warm-border rounded-lg shadow-2xs overflow-hidden">
                             <button onclick="updateQty('${item.id}', -1)" class="w-5 h-5 sm:w-7 sm:h-7 text-warm-text hover:bg-khaki-100 flex items-center justify-center"><i class="fa-solid fa-minus text-[8px] sm:text-[9px]"></i></button>
@@ -932,10 +932,10 @@
                         </div>
                     </td>
                     <td class="py-2 pr-1 text-center">
-                        <button onclick="openItemModal('${item.id}')" class="p-1 text-warm-muted hover:text-khaki-600 transition-colors">
-                            <i class="fa-solid fa-pen-to-square text-xs"></i>
-                        </button>
-                    </td>
+    <button onclick="openItemModal('${item.id}')" class="p-1 transition-opacity hover:opacity-70" style="color:${item.style.color};">
+        <i class="fa-solid fa-pen-to-square text-xs"></i>
+    </button>
+</td>
                 `;
                 tbody.appendChild(tr);
             });
