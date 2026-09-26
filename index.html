@@ -230,6 +230,10 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
+            <!-- 複製按鈕 -->
+            <button id="batch-copy-btn" onclick="handleBatchCopy()" class="hidden text-xs font-bold text-khaki-300 hover:text-white transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-copy"></i> 複製
+            </button>
             <button id="batch-edit-btn" onclick="handleBatchEdit()" class="hidden text-xs font-bold text-khaki-300 hover:text-white transition-colors flex items-center gap-1">
                 <i class="fa-solid fa-pen-to-square"></i> 編輯
             </button>
@@ -992,6 +996,14 @@
                 editBtn.classList.add('hidden');
             }
 
+            const copyBtn = document.getElementById('batch-copy-btn');
+            // 只在有選取商品且沒有選取資料夾時顯示複製按鈕 (確保僅針對表格商品)
+            if (window.selectedItems.size > 0 && window.selectedFolders.size === 0) {
+                copyBtn.classList.remove('hidden');
+            } else {
+                copyBtn.classList.add('hidden');
+            }
+
             if(total > 0) {
                 bar.classList.remove('translate-y-24', 'opacity-0');
             } else {
@@ -1006,6 +1018,33 @@
             } else if (window.selectedFolders.size === 0 && window.selectedItems.size === 1) {
                 const itemId = Array.from(window.selectedItems)[0];
                 openItemModal(itemId);
+            }
+        };
+
+        // ========== 新增批次複製商品邏輯 ==========
+        window.handleBatchCopy = function() {
+            if (window.selectedItems.size === 0) return;
+            
+            let copyCount = 0;
+            // 讀取當前勾選的商品，直接深拷貝成一模一樣的新物件
+            window.selectedItems.forEach((id, index) => {
+                const item = window.items.find(i => i.id === id);
+                if (item) {
+                    const newItem = JSON.parse(JSON.stringify(item));
+                    // 給予新的 ID 避免衝突
+                    newItem.id = 'i_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5); 
+                    newItem.createdAt = Date.now() + index; // 確保新增時間排序不重複
+                    
+                    window.items.push(newItem);
+                    copyCount++;
+                }
+            });
+            
+            if (copyCount > 0) {
+                saveData();
+                clearSelection(); // 複製完成後清空選取
+                renderItemsTable();
+                showToast(`已成功複製 ${copyCount} 個商品`, 'success');
             }
         };
 
