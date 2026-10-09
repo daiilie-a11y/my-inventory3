@@ -120,6 +120,12 @@
                 </div>
             </div>
             
+            <!-- 全區搜尋 -->
+            <div class="relative w-full">
+                <i class="fa-solid fa-globe absolute left-3 top-1/2 -translate-y-1/2 text-warm-muted text-xs"></i>
+                <input type="text" id="global-search-input" oninput="handleGlobalSearch()" placeholder="搜尋全區商品名稱..." class="w-full pl-8 pr-3 py-1.5 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-khaki-50/50 shadow-inner">
+            </div>
+
             <div id="breadcrumbs" class="flex items-center gap-1.5 text-xs text-warm-muted overflow-x-auto no-scrollbar pb-1 whitespace-nowrap">
                 <!-- 動態注入麵包屑 -->
             </div>
@@ -140,16 +146,16 @@
         <section id="item-section">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
                 <h2 class="text-xs font-bold text-khaki-700 flex items-center gap-1.5">
-                    <i class="fa-solid fa-list"></i> 內容商品
+                    <i class="fa-solid fa-list"></i> <span id="item-section-title">內容商品</span>
                     <span class="text-[11px] font-normal text-warm-muted ml-1">
                         (共 <span id="item-count" class="text-khaki-700 font-bold">0</span> 項)
                     </span>
                 </h2>
                 
-                <!-- 搜尋商品 -->
+                <!-- 當前資料夾搜尋 -->
                 <div class="relative w-full sm:w-64">
                     <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-warm-muted text-xs"></i>
-                    <input type="text" id="search-input" oninput="renderItemsTable()" placeholder="搜尋商品名稱..." class="w-full pl-8 pr-3 py-1.5 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white shadow-xs">
+                    <input type="text" id="search-input" oninput="handleLocalSearch()" placeholder="搜尋此區商品..." class="w-full pl-8 pr-3 py-1.5 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white shadow-xs">
                 </div>
             </div>
 
@@ -230,10 +236,6 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <!-- 複製按鈕 -->
-            <button id="batch-copy-btn" onclick="handleBatchCopy()" class="hidden text-xs font-bold text-khaki-300 hover:text-white transition-colors flex items-center gap-1">
-                <i class="fa-solid fa-copy"></i> 複製
-            </button>
             <button id="batch-edit-btn" onclick="handleBatchEdit()" class="hidden text-xs font-bold text-khaki-300 hover:text-white transition-colors flex items-center gap-1">
                 <i class="fa-solid fa-pen-to-square"></i> 編輯
             </button>
@@ -250,18 +252,17 @@
         </div>
     </div>
 
+    <!-- 其餘 Modal 保留原始代碼 -->
     <!-- 建立 / 編輯資料夾 Modal -->
     <div id="folder-modal" class="fixed inset-0 bg-warm-text/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden p-5 transform scale-95 opacity-0 transition-all duration-200" id="folder-modal-content">
             <h3 id="folder-modal-title" class="font-bold text-warm-text text-sm mb-3">新增資料夾</h3>
             <form onsubmit="handleFolderSubmit(event)">
                 <input type="hidden" id="folder-id-input">
-                
                 <div class="mb-3">
                     <label class="block font-bold text-warm-text mb-1 text-xs">資料夾名稱 <span class="text-rose-500">*</span></label>
                     <input type="text" id="folder-name-input" required placeholder="資料夾名稱..." class="w-full px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-khaki-50">
                 </div>
-
                 <div class="mb-4">
                     <label class="block font-bold text-warm-text mb-1 text-xs">資料夾顏色</label>
                     <div class="flex items-center gap-2 bg-khaki-50 p-2 border border-warm-border rounded-xl">
@@ -269,7 +270,6 @@
                         <input type="text" id="folder-color-hex" value="#B8977E" class="w-full px-2 py-1 text-xs bg-white border border-warm-border rounded-lg font-mono uppercase focus:outline-none">
                     </div>
                 </div>
-
                 <div class="flex justify-end gap-2">
                     <button type="button" onclick="closeFolderModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted">取消</button>
                     <button type="submit" class="px-4 py-2 bg-khaki-600 hover:bg-khaki-700 text-white rounded-xl text-xs font-bold transition-colors">儲存</button>
@@ -289,7 +289,6 @@
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            
             <div class="mb-5">
                 <label class="block font-bold text-warm-text mb-2 text-xs">選擇範圍</label>
                 <div class="flex flex-col gap-2.5">
@@ -303,7 +302,6 @@
                     </label>
                 </div>
             </div>
-
             <div class="grid grid-cols-2 gap-2 mt-2">
                 <button onclick="exportData('excel')" class="px-3 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition-colors">
                     <i class="fa-solid fa-file-excel"></i> Excel
@@ -326,10 +324,8 @@
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
-            
             <form id="item-form" onsubmit="handleItemSubmit(event)" class="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
                 <input type="hidden" id="item-id">
-                
                 <div>
                     <label class="block font-bold text-warm-text mb-1.5">商品照片</label>
                     <div class="flex items-start sm:items-center gap-3">
@@ -352,7 +348,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="space-y-3">
                     <div>
                         <label class="block font-bold text-warm-text mb-1">商品名稱 <span class="text-rose-500">*</span></label>
@@ -363,8 +358,6 @@
                         <input type="text" id="item-note" class="w-full px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white">
                     </div>
                 </div>
-
-                <!-- 價格與數量設定 -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block font-bold text-warm-text mb-1">價格 ($)</label>
@@ -375,7 +368,6 @@
                         <input type="number" id="item-quantity" min="0" value="1" required class="w-full px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-white">
                     </div>
                 </div>
-
                 <div class="p-3 bg-khaki-50 rounded-xl border border-warm-border space-y-3">
                     <div class="font-bold text-khaki-800 flex items-center gap-1.5 text-[11px]">
                         <i class="fa-solid fa-palette"></i> 視覺客製化
@@ -405,7 +397,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="pt-2 flex justify-end gap-2">
                     <button type="button" onclick="closeItemModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted">取消</button>
                     <button type="submit" class="px-5 py-2 bg-khaki-600 hover:bg-khaki-700 text-white rounded-xl text-xs font-bold shadow-sm">儲存</button>
@@ -420,18 +411,15 @@
             <h3 class="font-bold text-warm-text text-sm mb-2 flex items-center gap-1.5">
                 <i class="fa-solid fa-folder-tree text-khaki-500"></i> 移動至資料夾
             </h3>
-            
             <div class="flex gap-2 mb-3 mt-3">
                 <input type="text" id="quick-folder-name" placeholder="快速新增資料夾..." class="flex-1 px-3 py-2 border border-warm-border rounded-xl text-xs focus:outline-none focus:border-khaki-500 bg-khaki-50">
                 <button type="button" onclick="quickAddFolder()" class="px-3 py-2 bg-khaki-100 hover:bg-khaki-200 text-khaki-700 rounded-xl text-xs font-bold transition-colors shadow-sm">
                     <i class="fa-solid fa-plus"></i>
                 </button>
             </div>
-
             <select id="move-target-select" size="8" class="w-full px-2 py-2 border border-warm-border rounded-xl text-base focus:outline-none focus:border-khaki-500 bg-khaki-50/50 mb-4 h-56 overflow-y-auto">
                 <!-- 動態注入階層選項 -->
             </select>
-            
             <div class="flex justify-end gap-2">
                 <button type="button" onclick="closeMoveModal()" class="px-4 py-2 text-xs font-semibold text-warm-muted">取消</button>
                 <button type="button" onclick="executeBatchMove()" class="px-4 py-2 bg-khaki-600 text-white rounded-xl text-xs font-bold">確認移動</button>
@@ -604,7 +592,6 @@
             }, 2500);
         };
 
-        // ========== 匯出功能邏輯 (Excel / PDF) ==========
         window.openExportModal = function() {
             const modal = document.getElementById('export-modal');
             const content = document.getElementById('export-modal-content');
@@ -658,7 +645,6 @@
                 XLSX.writeFile(workbook, `庫存清單_${timestamp}.xlsx`);
                 closeExportModal();
                 showToast('成功匯出 Excel 表格！', 'success');
-
             } else if (format === 'pdf') {
                 const tempDiv = document.createElement('div');
                 tempDiv.style.padding = '20px';
@@ -708,30 +694,17 @@
             }
         };
 
-        // ========== 排序邏輯修正 (三段式切換) ==========
         window.toggleSort = function(type) {
             if (window.sortColumn !== type) {
-                // 第一次點擊該欄位
                 window.sortColumn = type;
-                // 名稱預設「小至大/A-Z」，價格與庫存預設「大至小」
                 window.sortDirection = type === 'name' ? 'asc' : 'desc'; 
             } else {
-                // 若已在此欄位，進行三段式切換
                 if (type === 'name') {
-                    if (window.sortDirection === 'asc') {
-                        window.sortDirection = 'desc'; // A-Z 變 Z-A
-                    } else {
-                        window.sortColumn = null;      // Z-A 變 恢復預設
-                        window.sortDirection = 'none';
-                    }
+                    if (window.sortDirection === 'asc') window.sortDirection = 'desc';
+                    else { window.sortColumn = null; window.sortDirection = 'none'; }
                 } else {
-                    // 價格或庫存
-                    if (window.sortDirection === 'desc') {
-                        window.sortDirection = 'asc';  // 大至小 變 小至大
-                    } else {
-                        window.sortColumn = null;      // 小至大 變 恢復預設
-                        window.sortDirection = 'none';
-                    }
+                    if (window.sortDirection === 'desc') window.sortDirection = 'asc';
+                    else { window.sortColumn = null; window.sortDirection = 'none'; }
                 }
             }
             renderItemsTable();
@@ -763,6 +736,23 @@
             renderFolderGrid();
             renderItemsTable();
             updateBatchUI();
+        };
+
+        // 全區搜尋與區域搜尋的事件處理
+        window.handleGlobalSearch = function() {
+            const globalQuery = document.getElementById('global-search-input').value;
+            if (globalQuery) {
+                document.getElementById('search-input').value = ''; // 優先級別全區搜尋，清空下方區域搜尋
+            }
+            renderView();
+        };
+
+        window.handleLocalSearch = function() {
+            const localQuery = document.getElementById('search-input').value;
+            if (localQuery) {
+                document.getElementById('global-search-input').value = ''; // 如果在下方打字，清空全區搜尋
+            }
+            renderView();
         };
 
         function renderBreadcrumbs() {
@@ -799,6 +789,7 @@
         window.navigateTo = function(folderId) {
             window.currentFolderId = folderId;
             document.getElementById('search-input').value = '';
+            document.getElementById('global-search-input').value = ''; // 切換資料夾時清空全區搜尋
             clearSelection();
             renderView();
         };
@@ -807,6 +798,12 @@
             const section = document.getElementById('folder-section');
             const grid = document.getElementById('folder-grid');
             grid.innerHTML = '';
+            
+            // 如果全區搜尋正在進行中，則隱藏資料夾以專注於商品搜尋結果
+            if (document.getElementById('global-search-input').value.trim()) {
+                section.classList.add('hidden');
+                return;
+            }
 
             const childFolders = window.folders.filter(f => f.parentId === window.currentFolderId);
             
@@ -861,12 +858,21 @@
 
             const tbody = document.getElementById('items-table-body');
             const emptyState = document.getElementById('empty-state');
-            const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
             
-            let currentItems = window.items.filter(i => i.folderId === window.currentFolderId);
+            const localSearchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+            const globalSearchQuery = document.getElementById('global-search-input').value.toLowerCase().trim();
             
-            if(searchQuery) {
-                currentItems = currentItems.filter(i => i.name.toLowerCase().includes(searchQuery));
+            let currentItems = [];
+
+            if (globalSearchQuery) {
+                document.getElementById('item-section-title').innerHTML = '全區搜尋結果';
+                currentItems = window.items.filter(i => i.name.toLowerCase().includes(globalSearchQuery));
+            } else {
+                document.getElementById('item-section-title').innerHTML = '內容商品';
+                currentItems = window.items.filter(i => i.folderId === window.currentFolderId);
+                if(localSearchQuery) {
+                    currentItems = currentItems.filter(i => i.name.toLowerCase().includes(localSearchQuery));
+                }
             }
 
             if (window.sortColumn === 'name') {
@@ -910,6 +916,14 @@
 
                 const displayPrice = (item.price !== undefined && item.price !== null && item.price !== '') ? `$${item.price}` : '-';
 
+                // 在全區搜尋模式下，加上資料夾位置標籤提示
+                let folderBadge = '';
+                if (globalSearchQuery) {
+                    const folder = window.folders.find(f => f.id === item.folderId);
+                    const folderName = folder ? folder.name : '主目錄';
+                    folderBadge = `<span class="inline-block bg-warm-border/40 text-warm-text px-1.5 py-0.5 rounded text-[9px] mr-1 mb-0.5"><i class="fa-solid fa-folder text-[8px] mr-0.5 opacity-70"></i>${escapeHtml(folderName)}</span>`;
+                }
+
                 tr.innerHTML = `
                     <td class="p-1 sm:p-2 text-center">
                         <input type="checkbox" onchange="toggleItemSelection('${item.id}')" ${isSelected ? 'checked' : ''} class="w-3.5 h-3.5 text-khaki-600 rounded border-warm-border cursor-pointer accent-khaki-600">
@@ -923,11 +937,11 @@
                         <div style="color:${item.style.color}; font-weight:${item.style.fontWeight};" class="text-xs sm:text-sm truncate">
                             ${escapeHtml(item.name)}
                         </div>
-                        ${item.note ? `<div style="color:${item.style.color};" class="text-[10px] opacity-80 truncate mt-0.5">${escapeHtml(item.note)}</div>` : ''}
+                        ${(item.note || globalSearchQuery) ? `<div style="color:${item.style.color};" class="text-[10px] opacity-80 truncate mt-0.5 flex flex-wrap items-center">${folderBadge}<span>${escapeHtml(item.note || '')}</span></div>` : ''}
                     </td>
                     <td class="py-2 px-0.5 text-center font-bold text-[11px] sm:text-xs" style="color:${item.style.color};">
-    ${displayPrice}
-</td>
+                        ${displayPrice}
+                    </td>
                     <td class="py-2 px-0.5 text-center">
                         <div class="inline-flex items-center bg-white border border-warm-border rounded-lg shadow-2xs overflow-hidden">
                             <button onclick="updateQty('${item.id}', -1)" class="w-5 h-5 sm:w-7 sm:h-7 text-warm-text hover:bg-khaki-100 flex items-center justify-center"><i class="fa-solid fa-minus text-[8px] sm:text-[9px]"></i></button>
@@ -936,10 +950,10 @@
                         </div>
                     </td>
                     <td class="py-2 pr-1 text-center">
-    <button onclick="openItemModal('${item.id}')" class="p-1 transition-opacity hover:opacity-70" style="color:${item.style.color};">
-        <i class="fa-solid fa-pen-to-square text-xs"></i>
-    </button>
-</td>
+                        <button onclick="openItemModal('${item.id}')" class="p-1 transition-opacity hover:opacity-70" style="color:${item.style.color};">
+                            <i class="fa-solid fa-pen-to-square text-xs"></i>
+                        </button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -967,9 +981,16 @@
             renderItemsTable(); updateBatchUI();
         };
         window.toggleSelectAllItems = function() {
-            const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
-            let currentItems = window.items.filter(i => i.folderId === window.currentFolderId);
-            if(searchQuery) currentItems = currentItems.filter(i => i.name.toLowerCase().includes(searchQuery));
+            const globalQuery = document.getElementById('global-search-input').value.toLowerCase().trim();
+            const localQuery = document.getElementById('search-input').value.toLowerCase().trim();
+            
+            let currentItems = [];
+            if(globalQuery) {
+                currentItems = window.items.filter(i => i.name.toLowerCase().includes(globalQuery));
+            } else {
+                currentItems = window.items.filter(i => i.folderId === window.currentFolderId);
+                if(localQuery) currentItems = currentItems.filter(i => i.name.toLowerCase().includes(localQuery));
+            }
 
             const isAll = currentItems.length > 0 && currentItems.every(i => window.selectedItems.has(i.id));
             if(isAll) currentItems.forEach(i => window.selectedItems.delete(i.id));
@@ -996,14 +1017,6 @@
                 editBtn.classList.add('hidden');
             }
 
-            const copyBtn = document.getElementById('batch-copy-btn');
-            // 只在有選取商品且沒有選取資料夾時顯示複製按鈕 (確保僅針對表格商品)
-            if (window.selectedItems.size > 0 && window.selectedFolders.size === 0) {
-                copyBtn.classList.remove('hidden');
-            } else {
-                copyBtn.classList.add('hidden');
-            }
-
             if(total > 0) {
                 bar.classList.remove('translate-y-24', 'opacity-0');
             } else {
@@ -1018,33 +1031,6 @@
             } else if (window.selectedFolders.size === 0 && window.selectedItems.size === 1) {
                 const itemId = Array.from(window.selectedItems)[0];
                 openItemModal(itemId);
-            }
-        };
-
-        // ========== 新增批次複製商品邏輯 ==========
-        window.handleBatchCopy = function() {
-            if (window.selectedItems.size === 0) return;
-            
-            let copyCount = 0;
-            // 讀取當前勾選的商品，直接深拷貝成一模一樣的新物件
-            window.selectedItems.forEach((id, index) => {
-                const item = window.items.find(i => i.id === id);
-                if (item) {
-                    const newItem = JSON.parse(JSON.stringify(item));
-                    // 給予新的 ID 避免衝突
-                    newItem.id = 'i_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5); 
-                    newItem.createdAt = Date.now() + index; // 確保新增時間排序不重複
-                    
-                    window.items.push(newItem);
-                    copyCount++;
-                }
-            });
-            
-            if (copyCount > 0) {
-                saveData();
-                clearSelection(); // 複製完成後清空選取
-                renderItemsTable();
-                showToast(`已成功複製 ${copyCount} 個商品`, 'success');
             }
         };
 
