@@ -236,6 +236,10 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
+            <!-- 新增的複製按鈕 -->
+            <button id="batch-copy-btn" onclick="handleBatchCopy()" class="hidden text-xs font-bold text-khaki-300 hover:text-white transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-copy"></i> 複製
+            </button>
             <button id="batch-edit-btn" onclick="handleBatchEdit()" class="hidden text-xs font-bold text-khaki-300 hover:text-white transition-colors flex items-center gap-1">
                 <i class="fa-solid fa-pen-to-square"></i> 編輯
             </button>
@@ -252,7 +256,6 @@
         </div>
     </div>
 
-    <!-- 其餘 Modal 保留原始代碼 -->
     <!-- 建立 / 編輯資料夾 Modal -->
     <div id="folder-modal" class="fixed inset-0 bg-warm-text/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden p-5 transform scale-95 opacity-0 transition-all duration-200" id="folder-modal-content">
@@ -738,11 +741,10 @@
             updateBatchUI();
         };
 
-        // 全區搜尋與區域搜尋的事件處理
         window.handleGlobalSearch = function() {
             const globalQuery = document.getElementById('global-search-input').value;
             if (globalQuery) {
-                document.getElementById('search-input').value = ''; // 優先級別全區搜尋，清空下方區域搜尋
+                document.getElementById('search-input').value = '';
             }
             renderView();
         };
@@ -750,7 +752,7 @@
         window.handleLocalSearch = function() {
             const localQuery = document.getElementById('search-input').value;
             if (localQuery) {
-                document.getElementById('global-search-input').value = ''; // 如果在下方打字，清空全區搜尋
+                document.getElementById('global-search-input').value = ''; 
             }
             renderView();
         };
@@ -789,7 +791,7 @@
         window.navigateTo = function(folderId) {
             window.currentFolderId = folderId;
             document.getElementById('search-input').value = '';
-            document.getElementById('global-search-input').value = ''; // 切換資料夾時清空全區搜尋
+            document.getElementById('global-search-input').value = '';
             clearSelection();
             renderView();
         };
@@ -799,7 +801,6 @@
             const grid = document.getElementById('folder-grid');
             grid.innerHTML = '';
             
-            // 如果全區搜尋正在進行中，則隱藏資料夾以專注於商品搜尋結果
             if (document.getElementById('global-search-input').value.trim()) {
                 section.classList.add('hidden');
                 return;
@@ -916,7 +917,6 @@
 
                 const displayPrice = (item.price !== undefined && item.price !== null && item.price !== '') ? `$${item.price}` : '-';
 
-                // 在全區搜尋模式下，加上資料夾位置標籤提示
                 let folderBadge = '';
                 if (globalSearchQuery) {
                     const folder = window.folders.find(f => f.id === item.folderId);
@@ -1017,12 +1017,47 @@
                 editBtn.classList.add('hidden');
             }
 
+            // 當有勾選商品，且沒有勾選資料夾時，才顯示複製按鈕
+            const copyBtn = document.getElementById('batch-copy-btn');
+            if (window.selectedItems.size > 0 && window.selectedFolders.size === 0) {
+                copyBtn.classList.remove('hidden');
+            } else {
+                copyBtn.classList.add('hidden');
+            }
+
             if(total > 0) {
                 bar.classList.remove('translate-y-24', 'opacity-0');
             } else {
                 bar.classList.add('translate-y-24', 'opacity-0');
             }
         }
+
+        // 新增的批次複製功能
+        window.handleBatchCopy = function() {
+            if (window.selectedItems.size === 0) return;
+
+            let count = 0;
+            window.selectedItems.forEach(itemId => {
+                const item = window.items.find(i => i.id === itemId);
+                if (item) {
+                    // 深拷貝物件確保資料獨立
+                    const newItem = JSON.parse(JSON.stringify(item));
+                    
+                    // 給予全新的 ID 與建立時間，並在名稱後加上標記
+                    newItem.id = 'i_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                    newItem.createdAt = Date.now();
+                    newItem.name = item.name + ' (複製)';
+                    
+                    window.items.push(newItem);
+                    count++;
+                }
+            });
+
+            saveData();
+            clearSelection();
+            renderView();
+            showToast(`已成功複製 ${count} 項商品`, 'success');
+        };
 
         window.handleBatchEdit = function() {
             if (window.selectedFolders.size === 1 && window.selectedItems.size === 0) {
